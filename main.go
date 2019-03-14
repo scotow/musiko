@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/cellofellow/gopiano"
-	"github.com/cellofellow/gopiano/responses"
 	"log"
 	"os"
+	"strings"
 )
 
 const (
@@ -16,8 +16,29 @@ var (
 	qualitiesOrder = []string{"high", "medium", "low"}
 )
 
-func higherQualityUrl(item responses.StationGetPlaylist) string {
-	return ""
+func init() {
+	for i, q := range qualitiesOrder {
+		qualitiesOrder[i] = fmt.Sprintf("%sQuality", q)
+	}
+}
+
+func higherQualityTracks(client *gopiano.Client, station string) ([]string, error) {
+	resp, err := client.StationGetPlaylist(alternativeStationToken)
+	if err != nil {
+		return nil, err
+	}
+
+	tracks := make([]string, 0, len(resp.Result.Items))
+	for _, item := range resp.Result.Items {
+		for _, quality := range qualitiesOrder {
+			if item, exists := item.AudioURLMap[quality]; exists {
+				tracks = append(tracks, item.AudioURL)
+				break
+			}
+		}
+	}
+
+	return tracks, nil
 }
 
 func main() {
@@ -41,10 +62,10 @@ func main() {
 		log.Fatalln(err)
 	}*/
 
-	resp, err := client.StationGetPlaylist(alternativeStationToken)
+	urls, err := higherQualityTracks(client, alternativeStationToken)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	fmt.Println(resp.Result.Items[0].AudioURLMap[qualitiesOrder[0]].AudioURL)
+	fmt.Println(strings.Join(urls, "\n"))
 }
