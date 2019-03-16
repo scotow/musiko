@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/scotow/musiko"
 	"io"
 	"log"
@@ -22,6 +23,8 @@ func handleMusic(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	fmt.Println(track)
 
 	resp, err := client.HttpClient.Get(track)
 	if err != nil {
