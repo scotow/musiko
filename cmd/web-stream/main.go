@@ -71,5 +71,5 @@ func main() {
 
 	_ = stream.Start(alternativeStationToken)
 
-	log.Fatalln(http.ListenAndServe(":8080", nil))
+	log.Fatalln(http.ListenAndServe(":4889", nil))
 }
