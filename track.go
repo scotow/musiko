@@ -14,10 +14,6 @@ var (
 	ErrWrongPlaylistType = errors.New("ffmpeg returns invalid m3u8 file")
 )
 
-var (
-	httpClient *http.Client
-)
-
 func NewTrack(url string) *Track {
 	return &Track{
 		url: url,
@@ -27,10 +23,10 @@ func NewTrack(url string) *Track {
 type Track struct {
 	url string
 
-	playlist m3u8.Playlist
+	playlist *m3u8.MediaPlaylist
 }
 
-func (t *Track) Open() (io.Reader, error) {
+func (t *Track) Open(httpClient *http.Client) (io.Reader, error) {
 	resp, err := httpClient.Get(t.url)
 	if err != nil {
 		return nil, err
@@ -43,8 +39,8 @@ func (t *Track) Open() (io.Reader, error) {
 	return resp.Body, nil
 }
 
-func (t *Track) GetData() ([]byte, error) {
-	r, err := t.Open()
+func (t *Track) GetData(httpClient *http.Client) ([]byte, error) {
+	r, err := t.Open(httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -57,17 +53,16 @@ func (t *Track) GetData() ([]byte, error) {
 	return data, nil
 }
 
-func (t *Track) SplitTS() (m3u8.Playlist, error) {
+func (t *Track) SplitTS(dest string, keepM3u8 bool, httpClient *http.Client) (*m3u8.MediaPlaylist, error) {
 	if t.playlist != nil {
 		return t.playlist, nil
 	}
 
-	r, err := t.Open()
+	r, err := t.Open(httpClient)
 	if err != nil {
 		return nil, err
 	}
 
-	dest := os.TempDir()
 	playlistPath, err := FfmpegSplitTS(r, dest)
 	if err != nil {
 		return nil, err
@@ -90,12 +85,19 @@ func (t *Track) SplitTS() (m3u8.Playlist, error) {
 		return nil, err
 	}
 
+	if !keepM3u8 {
+		err = os.Remove(playlistPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if playlistType != m3u8.MEDIA {
 		return nil, ErrWrongPlaylistType
 	}
 
-	// Cache playlist.
-	t.playlist = playlist
+	// Cast and cache playlist.
+	t.playlist = playlist.(*m3u8.MediaPlaylist)
 
-	return playlist, nil
+	return t.playlist, nil
 }

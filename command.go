@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	ffmpegCommand = "ffmpegCommand"
+	ffmpegCommand = "ffmpeg"
 )
 
 func commandExists(name string) bool {
@@ -28,7 +28,7 @@ func FfmpegSplitTS(reader io.Reader, dest string) (string, error) {
 	id := uuid.New().String()
 
 	playlist := path.Join(dest, fmt.Sprintf("%s.m3u8", id))
-	ts := path.Join(fmt.Sprintf("%s%%d.ts", id))
+	ts := path.Join(dest, fmt.Sprintf("%s-%%d.ts", id))
 
 	cmd := exec.Command(ffmpegCommand,
 		"-i", "-",

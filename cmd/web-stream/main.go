@@ -3,10 +3,11 @@ package main
 import (
 	"fmt"
 	"github.com/scotow/musiko"
-	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 const (
@@ -14,39 +15,61 @@ const (
 )
 
 var (
-	client *musiko.Client
+	stream       *musiko.Stream
+	partsHandler http.Handler
 )
 
-func handleMusic(w http.ResponseWriter, r *http.Request) {
-	track, err := client.NextTrack()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+func handle(w http.ResponseWriter, r *http.Request) {
+	if r.RequestURI == "/" {
+		handlePlaylist(w, r)
 		return
 	}
 
-	fmt.Println(track)
-
-	resp, err := client.HttpClient.Get(track)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if strings.HasSuffix(r.RequestURI, ".ts") {
+		partsHandler.ServeHTTP(w, r)
 		return
 	}
 
-	w.Header().Set("Content-Type", "video/mp4")
+	http.NotFound(w, r)
+}
 
-	_, err = io.Copy(w, resp.Body)
+func handlePlaylist(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+
+	err := stream.WritePlaylist(w)
 	if err != nil {
-		log.Println("copy error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }
 
 func main() {
-	c, err := musiko.NewClient(os.Args[1], os.Args[2], alternativeStationToken)
+	if !musiko.FfmpegInstalled() {
+		log.Fatalln("ffmpeg not installed or cannot be found")
+	}
+
+	cred := musiko.Credentials{
+		Username: os.Args[1],
+		Password: os.Args[2],
+	}
+
+	partsDir, err := ioutil.TempDir("", "musiko")
 	if err != nil {
 		log.Fatalln(err)
 	}
-	client = c
 
-	http.HandleFunc("/", handleMusic)
+	s, err := musiko.NewStream(cred, partsDir, true)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	stream = s
+
+	fmt.Println(partsDir)
+
+	partsHandler = http.FileServer(http.Dir(partsDir))
+	http.HandleFunc("/", handle)
+
+	_ = stream.Start(alternativeStationToken)
+
 	log.Fatalln(http.ListenAndServe(":8080", nil))
 }
