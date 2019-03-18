@@ -199,7 +199,20 @@ func (s *Stream) Start(station string) error {
 	return nil
 }
 
-//TODO: Handle error with a chan.
+func (s *Stream) Stop() error {
+	s.tracksLock.Lock()
+	for _, part := range s.parts {
+		err := os.Remove(path.Join(s.partsDir, part))
+		if err != nil {
+			return err
+		}
+	}
+	s.tracksLock.Unlock()
+
+	return nil
+}
+
+//TODO: Handle error with a chan<error>.
 func (s *Stream) autoRemove() {
 	for {
 		s.playlistLock.Lock()
