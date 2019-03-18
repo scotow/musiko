@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+const (
+	playlistSize = 6
+)
+
 var (
 	ErrPartsDirNotFound = errors.New("parts directory doesn't exist")
 	ErrNoTracksFound    = errors.New("no tracks found")
@@ -164,7 +168,7 @@ func (s *Stream) queueNextTrack() error {
 	playlist, err := next.SplitTS(s.partsDir, false, s.httpClient)
 
 	s.playlistLock.Lock()
-	for _, part := range playlist.Segments {
+	for i, part := range playlist.Segments {
 		if part == nil {
 			break
 		}
@@ -173,15 +177,26 @@ func (s *Stream) queueNextTrack() error {
 		if err != nil {
 			return err
 		}
+
+		// Set Discontinuity tag for the new part.
+		if i == 0 {
+			err = s.playlist.SetDiscontinuity()
+			if err != nil {
+				return err
+			}
+		}
+
+		// Append the part to the list.
 		s.parts = append(s.parts, part.URI)
 	}
+
 	s.playlistLock.Unlock()
 
 	return nil
 }
 
 func (s *Stream) Start(station string) error {
-	playlist, err := m3u8.NewMediaPlaylist(6, 128)
+	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 128)
 	if err != nil {
 		return err
 	}
@@ -244,7 +259,7 @@ func (s *Stream) autoRemove() {
 		s.tracksLock.Unlock()
 		s.playlistLock.Unlock()
 
-		if s.playlist.Count() < 6 {
+		if s.playlist.Count() <= playlistSize {
 			err = s.queueNextTrack()
 			if err != nil {
 				log.Fatalln("cannot queue new track", err)

@@ -36,7 +36,33 @@ func FfmpegSplitTS(reader io.Reader, dest string) (string, error) {
 		"-f", "segment",
 		"-segment_list", playlist,
 		"-segment_time", "10",
+		"-segment_list_flags", "+live",
 		ts)
+
+	cmd.Stdin = reader
+
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	return playlist, nil
+}
+
+func FfmpegSplitTSHLS(reader io.Reader, dest string) (string, error) {
+	id := uuid.New().String()
+
+	playlist := path.Join(dest, fmt.Sprintf("%s.m3u8", id))
+	ts := path.Join(dest, fmt.Sprintf("%s-%%d.ts", id))
+
+	cmd := exec.Command(ffmpegCommand,
+		"-i", "-",
+		"-c", "copy",
+		"-f", "hls",
+		"-hls_time", "10",
+		"-hls_list_size", "0",
+		"-hls_segment_filename", ts,
+		playlist)
 
 	cmd.Stdin = reader
 

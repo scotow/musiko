@@ -20,14 +20,12 @@ var (
 )
 
 func handle(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("URI:", r.RequestURI)
-
 	if r.RequestURI == "/" {
-		http.Redirect(w, r, "/stream.m3u8", http.StatusFound)
+		http.Redirect(w, r, "/playlist.m3u8", http.StatusFound)
 		return
 	}
 
-	if r.RequestURI == "/stream.m3u8" {
+	if r.RequestURI == "/playlist.m3u8" {
 		handlePlaylist(w, r)
 		return
 	}
