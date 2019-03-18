@@ -21,7 +21,11 @@ var (
 
 func handle(w http.ResponseWriter, r *http.Request) {
 	if r.RequestURI == "/" {
-		http.Redirect(w, r, "/playlist.m3u8", http.StatusFound)
+		if shouldPlayer(r) {
+			http.Redirect(w, r, "/player", http.StatusFound)
+		} else {
+			http.Redirect(w, r, "/playlist.m3u8", http.StatusFound)
+		}
 		return
 	}
 
@@ -37,6 +41,19 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.NotFound(w, r)
+}
+
+func shouldPlayer(r *http.Request) bool {
+	accept := r.Header.Get("Accept")
+	if accept == "" {
+		return false
+	}
+
+	if strings.Contains(accept, "text/html") {
+		return true
+	}
+
+	return false
 }
 
 func handlePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -71,8 +88,9 @@ func main() {
 	stream = s
 
 	fmt.Println(partsDir)
-
 	partsHandler = http.FileServer(http.Dir(partsDir))
+
+	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
 	http.HandleFunc("/", handle)
 
 	_ = stream.Start(alternativeStationToken)
