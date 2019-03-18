@@ -12,6 +12,12 @@ body {
     justify-content: center;
     align-items: center;
     flex-direction: column;
+
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none;
 }
 
 body::before {
@@ -25,9 +31,9 @@ body::before {
 }
 
 span {
+    color: white;
     font-family: 'Gloria Hallelujah', sans-serif;
     font-size: 60px;
-    color: white;
 }
 
 audio {
