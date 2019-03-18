@@ -1,15 +1,12 @@
-let video = document.getElementById('video');
+let audio = document.getElementById('audio');
 
 if(Hls.isSupported()) {
     let hls = new Hls();
     hls.loadSource('/playlist.m3u8');
-    hls.attachMedia(video);
+    hls.attachMedia(audio);
     hls.on(Hls.Events.MANIFEST_PARSED,function() {
-        video.play();
+        audio.play();
     });
-} else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = '/playlist.m3u8';
-    video.addEventListener('loadedmetadata',function() {
-        video.play();
-    });
+} else {
+    window.location = '/playlist.m3u8';
 }

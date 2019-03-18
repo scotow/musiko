@@ -11,6 +11,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    flex-direction: column;
 }
 
 body::before {
@@ -29,6 +30,6 @@ span {
     color: white;
 }
 
-video {
-    display: none;
+audio {
+    margin-top: 20px;
 }
