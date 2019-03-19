@@ -6,12 +6,13 @@ html, body {
 }
 
 body {
-    margin: 0;
-    background: #131313;
     display: flex;
     justify-content: center;
     align-items: center;
     flex-direction: column;
+    margin: 0;
+    background: #131313;
+    color: white;
 
     -webkit-touch-callout: none; /* iOS Safari */
     -webkit-user-select: none; /* Safari */
@@ -30,12 +31,72 @@ body::before {
     background: #15b154;
 }
 
-span {
-    color: white;
+#title {
+
     font-family: 'Gloria Hallelujah', sans-serif;
     font-size: 60px;
 }
 
-audio {
-    margin-top: 20px;
+#audio {
+    display: none;
+}
+
+#play-pause {
+    width: 90px;
+    height: 90px;
+    margin-top: 42px;
+    background: #15b154;
+    border-radius: 50%;
+}
+
+#play-pause > svg {
+    fill: white;
+}
+
+#volume {
+    display: flex;
+    align-items: center;
+    margin-top: 26px;
+}
+
+#volume > .fa {
+    margin: 0 8px;
+    font-size: 16px;
+    color: #666;
+}
+
+#volume > #slider {
+    width: 260px;
+    height: 8px;
+    background: #555;
+    border-radius: 15px;
+    overflow: hidden;
+
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+#volume > #slider::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: -100vw 0 0 100vw #15b154;
+
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+#volume > #slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: -100vw 0 0 100vw #15b154;
+
+    -moz-appearance: none;
+    appearance: none;
 }
