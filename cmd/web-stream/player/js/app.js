@@ -2,6 +2,8 @@ let audio = document.getElementById('audio');
 let animation = document.getElementById('animation');
 let slider = document.getElementById('slider');
 
+let playlistURL = '/playlist.m3u8';
+
 let pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
 let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
 
@@ -12,7 +14,7 @@ if (Hls.isSupported()) {
     loadCookieVolume();
 
     let hls = new Hls();
-    hls.loadSource('/playlist.m3u8');
+    hls.loadSource(playlistURL);
     hls.attachMedia(audio);
 
     hls.on(Hls.Events.MANIFEST_PARSED, function() {
@@ -29,7 +31,7 @@ if (Hls.isSupported()) {
     document.getElementById('volume-down').onclick = volumeDown;
     document.getElementById('volume-up').onclick = volumeUp;
 } else {
-    window.location = '/playlist.m3u8';
+    window.location = playlistURL;
 }
 
 function togglePlayPause() {
