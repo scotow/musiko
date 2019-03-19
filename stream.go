@@ -211,6 +211,8 @@ func (s *Stream) queueNextTrack() error {
 }
 
 func (s *Stream) Start(station string) error {
+	s.Lock()
+
 	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 128)
 	if err != nil {
 		return err
@@ -218,6 +220,10 @@ func (s *Stream) Start(station string) error {
 
 	s.station = station
 	s.playlist = playlist
+	s.tracks = nil
+	s.parts = nil
+
+	s.Unlock()
 
 	err = s.queueNextTrack()
 	if err != nil {
@@ -242,7 +248,7 @@ func (s *Stream) Stop() error {
 	return nil
 }
 
-//TODO: Handle error with a chan<error>.
+// TODO: Handle error with a chan<error>.
 func (s *Stream) autoRemove() {
 	for {
 		s.Lock()
@@ -253,6 +259,8 @@ func (s *Stream) autoRemove() {
 		}
 		s.Unlock()
 
+		// TODO: Use time difference for removal.
+		// Wait for chunk to be played.
 		time.Sleep(time.Duration(part.Duration * float64(time.Second)))
 
 		s.Lock()
@@ -262,14 +270,14 @@ func (s *Stream) autoRemove() {
 			break
 		}
 
-		//TODO: Find a better way to delete parts.
-		partPath := path.Join(s.partsDir, s.parts[0].URI)
-
-		err = os.Remove(partPath)
+		// Remove part from disk.
+		err = os.Remove(path.Join(s.partsDir, part.URI))
 		if err != nil {
 			log.Fatalln("cannot queue new track", err)
 			break
 		}
+
+		// Shift removed part.
 		s.parts = s.parts[1:]
 		s.Unlock()
 
