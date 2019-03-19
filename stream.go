@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	playlistSize    = 6
-	connectionRetry = 3
+	playlistSize = 6
 )
 
 var (
@@ -41,15 +40,6 @@ type Credentials struct {
 	Password string
 }
 
-func buildClient() (*gopiano.Client, error) {
-	client, err := gopiano.NewClient(gopiano.AndroidClient)
-	if err != nil {
-		return nil, err
-	}
-
-	return client, nil
-}
-
 func NewStream(cred Credentials, partsDir string, proxyless bool) (*Stream, error) {
 	stream := new(Stream)
 
@@ -65,7 +55,7 @@ func NewStream(cred Credentials, partsDir string, proxyless bool) (*Stream, erro
 		stream.httpClient = http.DefaultClient
 	}
 
-	client, err := buildClient()
+	client, err := gopiano.NewClient(gopiano.AndroidClient)
 	if err != nil {
 		return nil, err
 	}

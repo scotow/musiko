@@ -74,6 +74,8 @@ func handlePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	flag.Parse()
+
 	if !musiko.FfmpegInstalled() {
 		log.Fatalln("ffmpeg not installed or cannot be found")
 	}
@@ -85,12 +87,12 @@ func main() {
 
 	partsDir, err := ioutil.TempDir("", "musiko")
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("parts directory creation error:", err)
 	}
 
 	s, err := musiko.NewStream(cred, partsDir, true)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("stream creation error:", err)
 	}
 	stream = s
 
@@ -102,7 +104,7 @@ func main() {
 
 	err = stream.Start(*stationFlag)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("start stream error:", err)
 	}
 
 	log.Fatalln(http.ListenAndServe(":"+strconv.Itoa(*portFlag), nil))
