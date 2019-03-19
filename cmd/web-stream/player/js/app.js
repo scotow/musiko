@@ -24,7 +24,9 @@ if (Hls.isSupported()) {
     };
 
     document.getElementById('play-pause').onclick = togglePlayPause;
-    document.getElementById('slider').oninput = volumeChanged;
+    document.getElementById('slider').oninput = volumeSliderChanged;
+    document.getElementById('volume-down').onclick = volumeDown;
+    document.getElementById('volume-up').onclick = volumeUp;
 } else {
     window.location = '/playlist.m3u8';
 }
@@ -40,9 +42,29 @@ function updatePlayPauseButton() {
     animation.beginElement();
 }
 
-function volumeChanged() {
-    audio.volume = this.value / 100;
-    document.cookie = 'volume=' + this.value + ';expires=Fri, 31 Dec 9999 23:59:59 GMT;path=/player';
+function volumeDown() {
+    audio.volume = Math.max(0, audio.volume - 0.15);
+    updateVolumeSlider();
+    saveCookieVolume();
+}
+
+function volumeUp() {
+    audio.volume = Math.max(0, audio.volume + 0.15);
+    updateVolumeSlider();
+    saveCookieVolume();
+}
+
+function volumeSliderChanged() {
+    audio.volume = slider.value / 100;
+    saveCookieVolume();
+}
+
+function saveCookieVolume() {
+    document.cookie = 'volume=' + (audio.volume * 100) + ';expires=Fri, 31 Dec 9999 23:59:59 GMT;path=/player';
+}
+
+function updateVolumeSlider() {
+    slider.value = audio.volume * 100;
 }
 
 function loadCookieVolume() {
@@ -50,8 +72,8 @@ function loadCookieVolume() {
         let parts = cookie.split('=');
         if (parts[0] === 'volume') {
             let volume = parseInt(parts[1]);
-            slider.value = volume;
             audio.volume = volume / 100;
+            updateVolumeSlider();
             return;
         }
     }

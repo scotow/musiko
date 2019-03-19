@@ -5,20 +5,32 @@ html, body {
     font-size: 0;
 }
 
+html {
+    background: #131313;
+}
+
 body {
     display: flex;
     justify-content: center;
     align-items: center;
     flex-direction: column;
     margin: 0;
-    background: #131313;
     color: white;
+
+    opacity: 0;
+    animation: fade-out 500ms forwards;
 
     -webkit-touch-callout: none; /* iOS Safari */
     -webkit-user-select: none; /* Safari */
     -moz-user-select: none; /* Firefox */
     -ms-user-select: none; /* Internet Explorer/Edge */
     user-select: none;
+}
+
+@keyframes fade-out {
+    to {
+        opacity: 1;
+    }
 }
 
 body::before {
@@ -32,7 +44,6 @@ body::before {
 }
 
 #title {
-
     font-family: 'Gloria Hallelujah', sans-serif;
     font-size: 60px;
 }
@@ -47,10 +58,21 @@ body::before {
     margin-top: 42px;
     background: #15b154;
     border-radius: 50%;
+    cursor: pointer;
+    transition: background 100ms, transform 100ms;
+}
+
+#play-pause:hover, #play-pause:active {
+    background: #15924a;
+    transform: scale(0.97);
 }
 
 #play-pause > svg {
     fill: white;
+}
+
+#play-pause-path {
+    transform: translateX(-1px);
 }
 
 #volume {
@@ -63,6 +85,7 @@ body::before {
     margin: 0 8px;
     font-size: 16px;
     color: #666;
+    cursor: pointer;
 }
 
 #volume > #slider {
@@ -72,19 +95,25 @@ body::before {
     border-radius: 15px;
     overflow: hidden;
     outline: none;
+    transition: transform 200ms;
 
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
 }
 
+#volume > #slider:hover, #volume > #slider:active {
+    transform: scaleY(1.7);
+}
+
 #volume > #slider::-webkit-slider-thumb {
     width: 20px;
     height: 20px;
     background: white;
+    border: none;
     border-radius: 50%;
     cursor: pointer;
-    box-shadow: -100vw 0 0 100vw #15b154;
+    box-shadow: -310px 0 0 300px #15b154;
 
     -webkit-appearance: none;
     appearance: none;
@@ -94,6 +123,7 @@ body::before {
     width: 20px;
     height: 20px;
     background: white;
+    border: none;
     border-radius: 50%;
     cursor: pointer;
     box-shadow: -100vw 0 0 100vw #15b154;
