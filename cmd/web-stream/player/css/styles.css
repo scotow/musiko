@@ -71,6 +71,7 @@ body::before {
     background: #555;
     border-radius: 15px;
     overflow: hidden;
+    outline: none;
 
     -webkit-appearance: none;
     -moz-appearance: none;
