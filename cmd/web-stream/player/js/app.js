@@ -5,6 +5,8 @@ let slider = document.getElementById('slider');
 let pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
 let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
 
+let volumeVariation = 0.15;
+
 if (Hls.isSupported()) {
     loadCookieVolume();
 
@@ -18,9 +20,7 @@ if (Hls.isSupported()) {
     });
 
     document.body.onkeyup = function(e) {
-        if (e.key === ' ') {
-            togglePlayPause();
-        }
+        if (e.key === ' ') togglePlayPause();
     };
 
     document.getElementById('play-pause').onclick = togglePlayPause;
@@ -43,13 +43,13 @@ function updatePlayPauseButton() {
 }
 
 function volumeDown() {
-    audio.volume = Math.max(0, audio.volume - 0.15);
+    audio.volume = Math.max(0, audio.volume - volumeVariation);
     updateVolumeSlider();
     saveCookieVolume();
 }
 
 function volumeUp() {
-    audio.volume = Math.max(0, audio.volume + 0.15);
+    audio.volume = Math.max(0, audio.volume + volumeVariation);
     updateVolumeSlider();
     saveCookieVolume();
 }

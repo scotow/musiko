@@ -46,6 +46,7 @@ body::before {
 #title {
     font-family: 'Gloria Hallelujah', sans-serif;
     font-size: 60px;
+    cursor: default;
 }
 
 #audio {
@@ -62,9 +63,14 @@ body::before {
     transition: background 100ms, transform 100ms;
 }
 
-#play-pause:hover, #play-pause:active {
+#play-pause:hover {
     background: #15924a;
-    transform: scale(0.97);
+    transform: scale(0.98);
+}
+
+#play-pause:active {
+    background: #148040;
+    transform: scale(0.96);
 }
 
 #play-pause > svg {
