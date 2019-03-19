@@ -7,7 +7,6 @@ import (
 	"github.com/cellofellow/gopiano/responses"
 	"github.com/grafov/m3u8"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -21,8 +20,10 @@ const (
 )
 
 var (
-	ErrPartsDirNotFound = errors.New("parts directory doesn't exist")
-	ErrNoTracksFound    = errors.New("no tracks found")
+	ErrPartsDirNotFound     = errors.New("parts directory doesn't exist")
+	ErrNoTracksFound        = errors.New("no tracks found")
+	ErrPlaylistEmpty        = errors.New("the playlist is empty")
+	ErrInvalidPlaylistEntry = errors.New("playlist contains a nil entry")
 )
 
 var (
@@ -183,6 +184,8 @@ func (s *Stream) queueNextTrack() error {
 	playlist, err := next.SplitTS(s.partsDir, false, s.httpClient)
 
 	s.Lock()
+	defer s.Unlock()
+
 	for i, part := range playlist.Segments {
 		if part == nil {
 			break
@@ -205,12 +208,10 @@ func (s *Stream) queueNextTrack() error {
 		s.parts = append(s.parts, part)
 	}
 
-	s.Unlock()
-
 	return nil
 }
 
-func (s *Stream) Start(station string) error {
+func (s *Stream) Start(station string, c chan<- error) error {
 	s.Lock()
 
 	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 128)
@@ -230,7 +231,7 @@ func (s *Stream) Start(station string) error {
 		return err
 	}
 
-	go s.autoRemove()
+	go s.autoRemove(c)
 
 	return nil
 }
@@ -248,14 +249,20 @@ func (s *Stream) Stop() error {
 	return nil
 }
 
-// TODO: Handle error with a chan<error>.
-func (s *Stream) autoRemove() {
+func (s *Stream) autoRemove(c chan<- error) {
 	for {
 		s.Lock()
+		if len(s.parts) == 0 {
+			s.Unlock()
+			c <- ErrPlaylistEmpty
+			return
+		}
+
 		part := s.parts[0]
 		if part == nil {
-			log.Fatalln("no part in playlist")
-			break
+			s.Unlock()
+			c <- ErrInvalidPlaylistEntry
+			return
 		}
 		s.Unlock()
 
@@ -266,15 +273,17 @@ func (s *Stream) autoRemove() {
 		s.Lock()
 		err := s.playlist.Remove()
 		if err != nil {
-			log.Fatalln("cannot remove part", err)
-			break
+			s.Unlock()
+			c <- err
+			return
 		}
 
 		// Remove part from disk.
 		err = os.Remove(path.Join(s.partsDir, part.URI))
 		if err != nil {
-			log.Fatalln("cannot queue new track", err)
-			break
+			s.Unlock()
+			c <- err
+			return
 		}
 
 		// Shift removed part.
@@ -284,8 +293,8 @@ func (s *Stream) autoRemove() {
 		if s.playlist.Count() <= playlistSize {
 			err = s.queueNextTrack()
 			if err != nil {
-				log.Fatalln("cannot queue new track", err)
-				break
+				c <- err
+				return
 			}
 		}
 	}

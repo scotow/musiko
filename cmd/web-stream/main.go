@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	alternativeStationToken = "4156248623387312708"
+	alternativeStation = "4156248623387312708"
 )
 
 var (
@@ -22,7 +22,7 @@ var (
 var (
 	usernameFlag = flag.String("u", "", "Pandora username (or e-mail address)")
 	passwordFlag = flag.String("p", "", "Pandora password")
-	stationFlag  = flag.String("s", alternativeStationToken, "Pandora station ID")
+	stationFlag  = flag.String("s", alternativeStation, "Pandora station ID")
 	portFlag     = flag.Int("P", 8080, "HTTP listening port")
 )
 
@@ -51,16 +51,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func shouldPlayer(r *http.Request) bool {
-	accept := r.Header.Get("Accept")
-	if accept == "" {
-		return false
-	}
-
-	if strings.Contains(accept, "text/html") {
-		return true
-	}
-
-	return false
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
 func handlePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -102,13 +93,29 @@ func main() {
 	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
 	http.HandleFunc("/", handle)
 
-	err = stream.Start(*stationFlag)
+	streamErr, httpErr := make(chan error), make(chan error)
+
+	err = stream.Start(*stationFlag, streamErr)
 	if err != nil {
 		log.Fatalln("start stream error:", err)
 	}
 
-	listeningAddress := ":" + strconv.Itoa(*portFlag)
-	log.Println("Listening at", listeningAddress)
+	// Start HTTP server.
+	go func() {
+		listeningAddress := ":" + strconv.Itoa(*portFlag)
+		log.Println("Listening at", listeningAddress)
 
-	log.Fatalln(http.ListenAndServe(listeningAddress, nil))
+		err := http.ListenAndServe(listeningAddress, nil)
+		httpErr <- err
+	}()
+
+	select {
+	case err = <-streamErr:
+		break
+	case err = <-httpErr:
+		_ = stream.Stop()
+		break
+	}
+
+	log.Fatalln(err)
 }
