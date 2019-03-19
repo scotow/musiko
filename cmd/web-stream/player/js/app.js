@@ -6,6 +6,7 @@ let pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
 let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
 
 let volumeVariation = 0.15;
+let volumeTimeout = null;
 
 if (Hls.isSupported()) {
     loadCookieVolume();
@@ -60,7 +61,12 @@ function volumeSliderChanged() {
 }
 
 function saveCookieVolume() {
-    document.cookie = 'volume=' + (audio.volume * 100) + ';expires=Fri, 31 Dec 9999 23:59:59 GMT;path=/player';
+    if (volumeTimeout) clearTimeout(volumeTimeout);
+
+    volumeTimeout = setTimeout(function() {
+        document.cookie = 'volume=' + (audio.volume * 100) + ';expires=Fri, 31 Dec 9999 23:59:59 GMT;path=/player';
+        volumeTimeout = null;
+    }, 250);
 }
 
 function updateVolumeSlider() {
