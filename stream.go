@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cellofellow/gopiano"
+	"github.com/cellofellow/gopiano/responses"
 	"github.com/grafov/m3u8"
 	"io"
 	"log"
@@ -16,7 +17,8 @@ import (
 )
 
 const (
-	playlistSize = 6
+	playlistSize    = 6
+	connectionRetry = 3
 )
 
 var (
@@ -39,18 +41,8 @@ type Credentials struct {
 	Password string
 }
 
-func buildClient(cred Credentials) (*gopiano.Client, error) {
+func buildClient() (*gopiano.Client, error) {
 	client, err := gopiano.NewClient(gopiano.AndroidClient)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = client.AuthPartnerLogin()
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = client.AuthUserLogin(cred.Username, cred.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -59,28 +51,33 @@ func buildClient(cred Credentials) (*gopiano.Client, error) {
 }
 
 func NewStream(cred Credentials, partsDir string, proxyless bool) (*Stream, error) {
+	stream := new(Stream)
+
 	_, err := os.Stat(partsDir)
 	if os.IsNotExist(err) {
 		return nil, ErrPartsDirNotFound
 	}
+	stream.partsDir = partsDir
 
-	var httpClient *http.Client
 	if proxyless {
-		httpClient = httpClientNoProxy()
+		stream.httpClient = httpClientNoProxy()
 	} else {
-		httpClient = http.DefaultClient
+		stream.httpClient = http.DefaultClient
 	}
 
-	client, err := buildClient(cred)
+	client, err := buildClient()
+	if err != nil {
+		return nil, err
+	}
+	stream.client = client
+	stream.cred = cred
+
+	err = stream.authClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return &Stream{
-		partsDir:   partsDir,
-		client:     client,
-		httpClient: httpClient,
-	}, nil
+	return stream, nil
 }
 
 func httpClientNoProxy() *http.Client {
@@ -107,6 +104,7 @@ type Stream struct {
 
 	httpClient *http.Client
 	client     *gopiano.Client
+	cred       Credentials
 
 	playlist     *m3u8.MediaPlaylist
 	playlistLock sync.Mutex
@@ -116,10 +114,38 @@ type Stream struct {
 	tracksLock sync.Mutex
 }
 
+func (s *Stream) authClient() error {
+	_, err := s.client.AuthPartnerLogin()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.client.AuthUserLogin(s.cred.Username, s.cred.Password)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *Stream) highQualityTracks() ([]*Track, error) {
 	resp, err := s.client.StationGetPlaylist(s.station)
 	if err != nil {
-		return nil, err
+		// Check if the error is a 'INVALID_AUTH_TOKEN' error, aka. 'token expired'.
+		if pErr, is := err.(responses.ErrorResponse); is && pErr.Code == 1001 {
+			err = s.authClient()
+			if err != nil {
+				return nil, err
+			}
+
+			// Retry playlist fetch.
+			resp, err = s.client.StationGetPlaylist(s.station)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 
 	tracks := make([]*Track, 0, len(resp.Result.Items))

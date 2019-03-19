@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"flag"
 	"github.com/scotow/musiko"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +17,13 @@ const (
 var (
 	stream       *musiko.Stream
 	partsHandler http.Handler
+)
+
+var (
+	usernameFlag = flag.String("u", "", "Pandora username (or e-mail address)")
+	passwordFlag = flag.String("p", "", "Pandora password")
+	stationFlag  = flag.String("s", alternativeStationToken, "Pandora station ID")
+	portFlag     = flag.Int("P", 8080, "HTTP listening port")
 )
 
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -72,8 +79,8 @@ func main() {
 	}
 
 	cred := musiko.Credentials{
-		Username: os.Args[1],
-		Password: os.Args[2],
+		Username: *usernameFlag,
+		Password: *passwordFlag,
 	}
 
 	partsDir, err := ioutil.TempDir("", "musiko")
@@ -87,13 +94,16 @@ func main() {
 	}
 	stream = s
 
-	fmt.Println(partsDir)
+	log.Println("Parts directory:", partsDir)
 	partsHandler = http.FileServer(http.Dir(partsDir))
 
 	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
 	http.HandleFunc("/", handle)
 
-	_ = stream.Start(alternativeStationToken)
+	err = stream.Start(*stationFlag)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-	log.Fatalln(http.ListenAndServe(":4889", nil))
+	log.Fatalln(http.ListenAndServe(":"+strconv.Itoa(*portFlag), nil))
 }
