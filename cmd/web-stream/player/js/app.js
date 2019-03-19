@@ -50,7 +50,7 @@ function volumeDown() {
 }
 
 function volumeUp() {
-    audio.volume = Math.max(0, audio.volume + volumeVariation);
+    audio.volume = Math.min(1, audio.volume + volumeVariation);
     updateVolumeSlider();
     saveCookieVolume();
 }
