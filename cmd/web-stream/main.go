@@ -107,5 +107,8 @@ func main() {
 		log.Fatalln("start stream error:", err)
 	}
 
-	log.Fatalln(http.ListenAndServe(":"+strconv.Itoa(*portFlag), nil))
+	listeningAddress := ":" + strconv.Itoa(*portFlag)
+	log.Println("Listening at", listeningAddress)
+
+	log.Fatalln(http.ListenAndServe(listeningAddress, nil))
 }

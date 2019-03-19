@@ -96,12 +96,11 @@ type Stream struct {
 	client     *gopiano.Client
 	cred       Credentials
 
-	playlist     *m3u8.MediaPlaylist
-	playlistLock sync.Mutex
+	tracks   []*Track
+	parts    []*m3u8.MediaSegment
+	playlist *m3u8.MediaPlaylist
 
-	tracks     []*Track
-	parts      []string
-	tracksLock sync.Mutex
+	sync.RWMutex
 }
 
 func (s *Stream) authClient() error {
@@ -156,7 +155,7 @@ func (s *Stream) highQualityTracks() ([]*Track, error) {
 }
 
 func (s *Stream) nextTrack() (*Track, error) {
-	s.tracksLock.Lock()
+	s.Lock()
 
 	if len(s.tracks) == 0 {
 		tracks, err := s.highQualityTracks()
@@ -170,7 +169,7 @@ func (s *Stream) nextTrack() (*Track, error) {
 	track := s.tracks[0]
 	s.tracks = s.tracks[1:]
 
-	s.tracksLock.Unlock()
+	s.Unlock()
 
 	return track, nil
 }
@@ -183,7 +182,7 @@ func (s *Stream) queueNextTrack() error {
 
 	playlist, err := next.SplitTS(s.partsDir, false, s.httpClient)
 
-	s.playlistLock.Lock()
+	s.Lock()
 	for i, part := range playlist.Segments {
 		if part == nil {
 			break
@@ -203,10 +202,10 @@ func (s *Stream) queueNextTrack() error {
 		}
 
 		// Append the part to the list.
-		s.parts = append(s.parts, part.URI)
+		s.parts = append(s.parts, part)
 	}
 
-	s.playlistLock.Unlock()
+	s.Unlock()
 
 	return nil
 }
@@ -231,14 +230,14 @@ func (s *Stream) Start(station string) error {
 }
 
 func (s *Stream) Stop() error {
-	s.tracksLock.Lock()
+	s.Lock()
 	for _, part := range s.parts {
-		err := os.Remove(path.Join(s.partsDir, part))
+		err := os.Remove(path.Join(s.partsDir, part.URI))
 		if err != nil {
 			return err
 		}
 	}
-	s.tracksLock.Unlock()
+	s.Unlock()
 
 	return nil
 }
@@ -246,17 +245,17 @@ func (s *Stream) Stop() error {
 //TODO: Handle error with a chan<error>.
 func (s *Stream) autoRemove() {
 	for {
-		s.playlistLock.Lock()
-		part := s.playlist.Segments[0]
+		s.Lock()
+		part := s.parts[0]
 		if part == nil {
 			log.Fatalln("no part in playlist")
 			break
 		}
-		s.playlistLock.Unlock()
+		s.Unlock()
 
 		time.Sleep(time.Duration(part.Duration * float64(time.Second)))
 
-		s.playlistLock.Lock()
+		s.Lock()
 		err := s.playlist.Remove()
 		if err != nil {
 			log.Fatalln("cannot remove part", err)
@@ -264,16 +263,15 @@ func (s *Stream) autoRemove() {
 		}
 
 		//TODO: Find a better way to delete parts.
-		partPath := path.Join(s.partsDir, s.parts[0])
-		s.tracksLock.Lock()
+		partPath := path.Join(s.partsDir, s.parts[0].URI)
+
 		err = os.Remove(partPath)
 		if err != nil {
 			log.Fatalln("cannot queue new track", err)
 			break
 		}
 		s.parts = s.parts[1:]
-		s.tracksLock.Unlock()
-		s.playlistLock.Unlock()
+		s.Unlock()
 
 		if s.playlist.Count() <= playlistSize {
 			err = s.queueNextTrack()
@@ -286,9 +284,9 @@ func (s *Stream) autoRemove() {
 }
 
 func (s *Stream) WritePlaylist(writer io.Writer) error {
-	s.playlistLock.Lock()
+	s.RLock()
 	_, err := io.Copy(writer, s.playlist.Encode())
-	s.playlistLock.Unlock()
+	s.RUnlock()
 
 	return err
 }
