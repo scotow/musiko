@@ -221,7 +221,6 @@ func (s *Stream) Start(station string, c chan<- error) error {
 
 	s.station = station
 	s.playlist = playlist
-	s.tracks = nil
 	s.parts = nil
 
 	s.Unlock()
@@ -249,19 +248,19 @@ func (s *Stream) Stop() error {
 	return nil
 }
 
-func (s *Stream) autoRemove(c chan<- error) {
+func (s *Stream) autoRemove(error chan<- error) {
 	for {
 		s.Lock()
 		if len(s.parts) == 0 {
 			s.Unlock()
-			c <- ErrPlaylistEmpty
+			error <- ErrPlaylistEmpty
 			return
 		}
 
 		part := s.parts[0]
 		if part == nil {
 			s.Unlock()
-			c <- ErrInvalidPlaylistEntry
+			error <- ErrInvalidPlaylistEntry
 			return
 		}
 		s.Unlock()
@@ -274,7 +273,7 @@ func (s *Stream) autoRemove(c chan<- error) {
 		err := s.playlist.Remove()
 		if err != nil {
 			s.Unlock()
-			c <- err
+			error <- err
 			return
 		}
 
@@ -282,7 +281,7 @@ func (s *Stream) autoRemove(c chan<- error) {
 		err = os.Remove(path.Join(s.partsDir, part.URI))
 		if err != nil {
 			s.Unlock()
-			c <- err
+			error <- err
 			return
 		}
 
@@ -293,13 +292,14 @@ func (s *Stream) autoRemove(c chan<- error) {
 		if s.playlist.Count() <= playlistSize {
 			err = s.queueNextTrack()
 			if err != nil {
-				c <- err
+				error <- err
 				return
 			}
 		}
 	}
 }
 
+// TODO: Can this block the stream for too long?
 func (s *Stream) WritePlaylist(writer io.Writer) error {
 	s.RLock()
 	_, err := io.Copy(writer, s.playlist.Encode())
