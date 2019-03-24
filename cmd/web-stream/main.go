@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	alternativeStation = "4156248623387312708"
+	alternativeStation = "4162959307923849796"
 )
 
 var (
@@ -19,6 +19,7 @@ var (
 	partsHandler http.Handler
 )
 
+// TODO: Use station name rather than ID.
 var (
 	usernameFlag = flag.String("u", "", "Pandora username (or e-mail address)")
 	passwordFlag = flag.String("p", "", "Pandora password")
