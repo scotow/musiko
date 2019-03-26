@@ -2,6 +2,7 @@ package musiko
 
 import (
 	"bytes"
+	"github.com/google/uuid"
 	"github.com/grafov/m3u8"
 	"github.com/pkg/errors"
 	"io"
@@ -18,6 +19,7 @@ var (
 
 func NewTrack(url string, httpClient *http.Client) *Track {
 	t := new(Track)
+	t.id = uuid.New()
 	t.url = url
 	t.httpClient = httpClient
 
@@ -25,6 +27,7 @@ func NewTrack(url string, httpClient *http.Client) *Track {
 }
 
 type Track struct {
+	id         uuid.UUID
 	url        string
 	data       []byte
 	httpClient *http.Client

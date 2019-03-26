@@ -142,7 +142,7 @@ func (s *Stream) highQualityTracks() ([]*Track, error) {
 	for _, item := range resp.Result.Items {
 		for _, quality := range qualitiesOrder {
 			if item, exists := item.AudioURLMap[quality]; exists {
-				tracks = append(tracks, NewTrack(item.AudioURL))
+				tracks = append(tracks, NewTrack(item.AudioURL, s.httpClient))
 				break
 			}
 		}
@@ -245,6 +245,10 @@ func (s *Stream) Stop() error {
 	}
 	s.Unlock()
 
+	return nil
+}
+
+func (s *Stream) queueNextPlaylist() error {
 	return nil
 }
 
