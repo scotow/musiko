@@ -49,7 +49,7 @@ func FfmpegSplitTS(reader io.Reader, dest string) (string, error) {
 	return playlist, nil
 }
 
-func FfmpegSplitTSHLS(reader io.Reader, dest string) (string, error) {
+/*func FfmpegSplitTSHLS(reader io.Reader, dest string) (string, error) {
 	id := uuid.New().String()
 
 	playlist := path.Join(dest, fmt.Sprintf("%s.m3u8", id))
@@ -72,4 +72,4 @@ func FfmpegSplitTSHLS(reader io.Reader, dest string) (string, error) {
 	}
 
 	return playlist, nil
-}
+}*/

@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"github.com/scotow/musiko"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,8 +14,8 @@ const (
 )
 
 var (
-	stream       *musiko.Stream
-	partsHandler http.Handler
+	stream *musiko.Stream
+	//partsHandler http.Handler
 )
 
 // TODO: Use station name rather than ID.
@@ -43,8 +42,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.HasSuffix(r.RequestURI, ".ts") {
-		w.Header().Set("Content-Type", "video/mp2t")
-		partsHandler.ServeHTTP(w, r)
+		handlePart(w, r)
 		return
 	}
 
@@ -55,10 +53,27 @@ func shouldPlayer(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
-func handlePlaylist(w http.ResponseWriter, r *http.Request) {
+func handlePlaylist(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 
 	err := stream.WritePlaylist(w)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func handlePart(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "video/mp2t")
+
+	var part string
+	if strings.HasPrefix(r.RequestURI, "/") {
+		part = r.RequestURI[1:]
+	} else {
+		part = r.RequestURI
+	}
+
+	err := stream.WritePart(w, part)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -77,26 +92,26 @@ func main() {
 		Password: *passwordFlag,
 	}
 
-	partsDir, err := ioutil.TempDir("", "musiko")
+	/*partsDir, err := ioutil.TempDir("", "musiko")
 	if err != nil {
 		log.Fatalln("parts directory creation error:", err)
-	}
+	}*/
 
-	s, err := musiko.NewStream(cred, partsDir, true)
+	s, err := musiko.NewStream(cred /*partsDir,*/, true)
 	if err != nil {
 		log.Fatalln("stream creation error:", err)
 	}
 	stream = s
 
-	log.Println("Parts directory:", partsDir)
-	partsHandler = http.FileServer(http.Dir(partsDir))
+	//log.Println("Parts directory:", partsDir)
+	//partsHandler = http.FileServer(http.Dir(partsDir))
 
 	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
 	http.HandleFunc("/", handle)
 
-	streamErr, httpErr := make(chan error), make(chan error)
+	httpErr := make(chan error)
 
-	err = stream.Start(*stationFlag, streamErr)
+	err, streamErr := stream.Start(*stationFlag)
 	if err != nil {
 		log.Fatalln("start stream error:", err)
 	}

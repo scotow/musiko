@@ -15,6 +15,7 @@ import (
 var (
 	ErrAPIStatusCode     = errors.New("api responded with a non 200")
 	ErrWrongPlaylistType = errors.New("ffmpeg returns invalid m3u8 file")
+	ErrSplitMismatch     = errors.New("Playlist and parts mismatch")
 )
 
 func NewTrack(url string, httpClient *http.Client) *Track {
@@ -68,6 +69,7 @@ func (t *Track) GetData() ([]byte, error) {
 	return data, nil
 }
 
+// TODO: Use defer to remove parts on error.
 func (t *Track) GetParts() (*m3u8.MediaPlaylist, [][]byte, error) {
 	if t.playlist != nil && t.parts != nil {
 		return t.playlist, t.parts, nil
@@ -114,12 +116,20 @@ func (t *Track) GetParts() (*m3u8.MediaPlaylist, [][]byte, error) {
 	parts := make([][]byte, 0, len(playlistMedia.Segments))
 
 	for _, seg := range playlistMedia.Segments {
+		if seg == nil {
+			break
+		}
+
 		part, err := ioutil.ReadFile(path.Join(tmp, seg.URI))
 		if err != nil {
 			return nil, nil, err
 		}
 
 		parts = append(parts, part)
+	}
+
+	if uint(len(parts)) != playlistMedia.Count() {
+		return nil, nil, ErrSplitMismatch
 	}
 
 	err = os.RemoveAll(tmp)
@@ -133,7 +143,7 @@ func (t *Track) GetParts() (*m3u8.MediaPlaylist, [][]byte, error) {
 	return playlistMedia, parts, nil
 }
 
-func (t *Track) SplitTS(dest string, keepM3u8 bool) (*m3u8.MediaPlaylist, error) {
+/*func (t *Track) SplitTS(dest string, keepM3u8 bool) (*m3u8.MediaPlaylist, error) {
 	if t.playlist != nil {
 		return t.playlist, nil
 	}
@@ -180,4 +190,4 @@ func (t *Track) SplitTS(dest string, keepM3u8 bool) (*m3u8.MediaPlaylist, error)
 	t.playlist = playlist.(*m3u8.MediaPlaylist)
 
 	return t.playlist, nil
-}
+}*/
