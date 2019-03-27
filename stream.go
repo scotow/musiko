@@ -316,7 +316,7 @@ func (s *Stream) queueNextPlaylist() error {
 func (s *Stream) autoRemove() {
 	for {
 		s.Lock()
-		if len(s.parts) == 0 {
+		if len(s.queue) == 0 {
 			s.Unlock()
 			s.errChan <- ErrPlaylistEmpty
 			return
@@ -350,8 +350,9 @@ func (s *Stream) autoRemove() {
 			return
 		}*/
 
-		// Shift removed part.
+		// Shift removed part and remove it from part map.
 		s.queue = s.queue[1:]
+		delete(s.parts, part.URI)
 		s.Unlock()
 
 		//log.Println("Part removed from playlist.")
