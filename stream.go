@@ -320,20 +320,20 @@ func (s *Stream) queueNextPlaylist() error {
 
 func (s *Stream) autoRemove() {
 	for {
-		s.Lock()
+		s.RLock()
 		if len(s.queue) == 0 {
-			s.Unlock()
+			s.RUnlock()
 			s.errChan <- ErrPlaylistEmpty
 			return
 		}
 
 		part := s.queue[0]
 		if part == nil {
-			s.Unlock()
+			s.RUnlock()
 			s.errChan <- ErrInvalidPlaylistEntry
 			return
 		}
-		s.Unlock()
+		s.RUnlock()
 
 		// TODO: Use time difference for removal.
 		// Wait for chunk to be played.
@@ -350,6 +350,8 @@ func (s *Stream) autoRemove() {
 		// Shift removed part and remove it from part map.
 		s.queue = s.queue[1:]
 		delete(s.parts, part.URI)
+
+		//TODO : Should I switch from write-lock to read-block here?
 
 		//log.Println("Part removed from playlist.")
 
@@ -375,7 +377,7 @@ func (s *Stream) WritePlaylist(writer io.Writer) error {
 	// TODO: Use a inner cache.
 	// Copy playlist data to a temporary buffer.
 	buffer := s.playlist.Encode().Bytes()
-	data := make([]byte, 0, len(buffer))
+	data := make([]byte, len(buffer))
 	copy(data, buffer)
 
 	s.RUnlock()
