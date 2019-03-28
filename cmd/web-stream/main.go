@@ -75,7 +75,7 @@ func handlePart(w http.ResponseWriter, r *http.Request) {
 
 	err := stream.WritePart(w, part)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 }
