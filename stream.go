@@ -105,6 +105,7 @@ type Stream struct {
 	parts    map[string][]byte
 	playlist *m3u8.MediaPlaylist
 
+	fetching bool
 	sync.RWMutex
 }
 
@@ -216,9 +217,7 @@ func (s *Stream) queueNextTrack() error {
 }*/
 
 func (s *Stream) Start(station string) (error, <-chan error) {
-	log.Println("Stream starting.")
-
-	s.Lock()
+	log.Println("Starting stream...")
 
 	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 1024)
 	if err != nil {
@@ -232,8 +231,6 @@ func (s *Stream) Start(station string) (error, <-chan error) {
 	s.parts = make(map[string][]byte)
 	s.queue = nil
 	s.errChan = errChan
-
-	s.Unlock()
 
 	err = s.queueNextPlaylist()
 	if err != nil {
@@ -251,6 +248,10 @@ func (s *Stream) Stop() error {
 }
 
 func (s *Stream) queueNextPlaylist() error {
+	s.Lock()
+	s.fetching = true
+	s.Unlock()
+
 	log.Println("Queuing a new playlist.")
 
 	tracks, err := s.highQualityTracks()
@@ -309,6 +310,10 @@ func (s *Stream) queueNextPlaylist() error {
 
 	wg.Wait()
 
+	s.Lock()
+	s.fetching = false
+	s.Unlock()
+
 	log.Println("New playlist queued.")
 	return errCommon
 }
@@ -353,13 +358,11 @@ func (s *Stream) autoRemove() {
 		// Shift removed part and remove it from part map.
 		s.queue = s.queue[1:]
 		delete(s.parts, part.URI)
-		s.Unlock()
 
 		//log.Println("Part removed from playlist.")
 
-		// TODO: Check if fetching is in progress (fetchingCount?).
 		// TODO: Use song duration rather than part count.
-		if len(s.queue) == fetchLimit {
+		if len(s.queue) == fetchLimit && !s.fetching {
 			log.Printf("Playlist almost empty (%d).\n", len(s.queue))
 			go func() {
 				err := s.queueNextPlaylist()
@@ -368,6 +371,8 @@ func (s *Stream) autoRemove() {
 				}
 			}()
 		}
+
+		s.Unlock()
 	}
 }
 
