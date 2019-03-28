@@ -347,14 +347,6 @@ func (s *Stream) autoRemove() {
 			return
 		}
 
-		// Remove part from disk.
-		/*err = os.Remove(path.Join(s.partsDir, part.URI))
-		if err != nil {
-			s.Unlock()
-			s.errChan <- err
-			return
-		}*/
-
 		// Shift removed part and remove it from part map.
 		s.queue = s.queue[1:]
 		delete(s.parts, part.URI)
@@ -362,7 +354,7 @@ func (s *Stream) autoRemove() {
 		//log.Println("Part removed from playlist.")
 
 		// TODO: Use song duration rather than part count.
-		if len(s.queue) == fetchLimit && !s.fetching {
+		if len(s.queue) <= fetchLimit && !s.fetching {
 			log.Printf("Playlist almost empty (%d).\n", len(s.queue))
 			go func() {
 				err := s.queueNextPlaylist()
@@ -376,23 +368,32 @@ func (s *Stream) autoRemove() {
 	}
 }
 
-// TODO: Can this block the stream for too long?
+// TODO: Can this block the stream for too long if the client is slow?
 func (s *Stream) WritePlaylist(writer io.Writer) error {
 	s.RLock()
-	defer s.RUnlock()
 
-	_, err := io.Copy(writer, s.playlist.Encode())
+	// TODO: Use a inner cache.
+	// Copy playlist data to a temporary buffer.
+	buffer := s.playlist.Encode().Bytes()
+	data := make([]byte, 0, len(buffer))
+	copy(data, buffer)
+
+	s.RUnlock()
+
+	_, err := writer.Write(data)
 	return err
 }
 
 func (s *Stream) WritePart(writer io.Writer, name string) error {
 	s.RLock()
-	defer s.RUnlock()
 
 	part, exists := s.parts[name]
 	if !exists {
 		return ErrPartNotFound
 	}
+
+	// Unlock here to allow long writing.
+	s.RUnlock()
 
 	_, err := writer.Write(part)
 	return err
