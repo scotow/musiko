@@ -15,7 +15,6 @@ const (
 
 var (
 	stream *musiko.Stream
-	//partsHandler http.Handler
 )
 
 // TODO: Use station name rather than ID.
@@ -92,26 +91,18 @@ func main() {
 		Password: *passwordFlag,
 	}
 
-	/*partsDir, err := ioutil.TempDir("", "musiko")
-	if err != nil {
-		log.Fatalln("parts directory creation error:", err)
-	}*/
-
-	s, err := musiko.NewStream(cred /*partsDir,*/, true)
+	s, err := musiko.NewStream(cred, *stationFlag, true)
 	if err != nil {
 		log.Fatalln("stream creation error:", err)
 	}
 	stream = s
-
-	//log.Println("Parts directory:", partsDir)
-	//partsHandler = http.FileServer(http.Dir(partsDir))
 
 	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
 	http.HandleFunc("/", handle)
 
 	httpErr := make(chan error)
 
-	err, streamErr := stream.Start(*stationFlag)
+	streamErr, err := stream.Start()
 	if err != nil {
 		log.Fatalln("start stream error:", err)
 	}
@@ -127,10 +118,8 @@ func main() {
 
 	select {
 	case err = <-streamErr:
-		break
 	case err = <-httpErr:
-		_ = stream.Stop()
-		break
+		stream.Pause()
 	}
 
 	log.Fatalln(err)
