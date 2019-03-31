@@ -2,9 +2,6 @@ package musiko
 
 import (
 	"errors"
-	"fmt"
-	"github.com/cellofellow/gopiano"
-	"github.com/cellofellow/gopiano/responses"
 	"github.com/grafov/m3u8"
 	"io"
 	"log"
@@ -30,28 +27,12 @@ var (
 	ErrStreamAlreadyStarted = errors.New("stream cannot be started")
 	ErrStreamNotRunning     = errors.New("stream not running")
 	ErrStreamNotPaused      = errors.New("stream not paused")
-	ErrNoTracksFound        = errors.New("no tracks found")
 	ErrPlaylistEmpty        = errors.New("the playlist is empty")
 	ErrInvalidPlaylistEntry = errors.New("playlist contains a nil entry")
 	ErrPartNotFound         = errors.New("part not found")
 )
 
-var (
-	qualitiesOrder = []string{"high", "medium", "low"}
-)
-
-func init() {
-	for i, q := range qualitiesOrder {
-		qualitiesOrder[i] = fmt.Sprintf("%sQuality", q)
-	}
-}
-
-type Credentials struct {
-	Username string
-	Password string
-}
-
-func NewStream(cred Credentials, station string, proxyLess bool) (*Stream, error) {
+func NewStream(client *Client, station string, proxyLess bool) (*Stream, error) {
 	stream := new(Stream)
 
 	if proxyLess {
@@ -60,17 +41,11 @@ func NewStream(cred Credentials, station string, proxyLess bool) (*Stream, error
 		stream.httpClient = http.DefaultClient
 	}
 
-	client, err := gopiano.NewClient(gopiano.AndroidClient)
+	err := client.Auth()
 	if err != nil {
 		return nil, err
 	}
 	stream.client = client
-	stream.cred = cred
-
-	err = stream.authClient()
-	if err != nil {
-		return nil, err
-	}
 
 	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 256)
 	if err != nil {
@@ -105,8 +80,7 @@ type Stream struct {
 	station string
 
 	httpClient *http.Client
-	client     *gopiano.Client
-	cred       Credentials
+	client     *Client
 
 	errChan    chan<- error
 	pauseChan  chan struct{}
@@ -118,57 +92,6 @@ type Stream struct {
 
 	fetching bool
 	sync.RWMutex
-}
-
-func (s *Stream) authClient() error {
-	_, err := s.client.AuthPartnerLogin()
-	if err != nil {
-		return err
-	}
-
-	_, err = s.client.AuthUserLogin(s.cred.Username, s.cred.Password)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Stream) highQualityTracks() ([]*Track, error) {
-	resp, err := s.client.StationGetPlaylist(s.station)
-	if err != nil {
-		// Check if the error is a 'INVALID_AUTH_TOKEN' error, aka. 'token expired'.
-		if pErr, is := err.(responses.ErrorResponse); is && pErr.Code == 1001 {
-			err = s.authClient()
-			if err != nil {
-				return nil, err
-			}
-
-			// Retry playlist fetch.
-			resp, err = s.client.StationGetPlaylist(s.station)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	tracks := make([]*Track, 0, len(resp.Result.Items))
-	for _, item := range resp.Result.Items {
-		for _, quality := range qualitiesOrder {
-			if item, exists := item.AudioURLMap[quality]; exists {
-				tracks = append(tracks, NewTrack(item.AudioURL, s.httpClient))
-				break
-			}
-		}
-	}
-
-	if len(tracks) == 0 {
-		return nil, ErrNoTracksFound
-	}
-
-	return tracks, nil
 }
 
 func (s *Stream) Start() (<-chan error, error) {
@@ -243,7 +166,7 @@ func (s *Stream) queueNextPlaylist() error {
 
 	log.Println("Queuing a new playlist.")
 
-	tracks, err := s.highQualityTracks()
+	tracks, err := s.client.HighQualityTracks(s.station, s.httpClient)
 	if err != nil {
 		return err
 	}
@@ -293,7 +216,7 @@ func (s *Stream) queueNextPlaylist() error {
 				s.queue = append(s.queue, seg)
 			}
 
-			log.Printf("Track added to main playlist (%s).\n", track.id.String())
+			log.Printf("Track added to main playlist (%s).\n", t.id.String())
 		}(track)
 	}
 

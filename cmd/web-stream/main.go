@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	alternativeStation = "4162959307923849796"
+	alternativeStation = "G18"
 
 	pauseTimeout = 90 * time.Second
 	pauseTick    = 15 * time.Second
@@ -94,12 +94,27 @@ func main() {
 		log.Fatalln("ffmpeg not installed or cannot be found")
 	}
 
-	cred := musiko.Credentials{
-		Username: *usernameFlag,
-		Password: *passwordFlag,
+	var (
+		client *musiko.Client
+		err    error
+	)
+
+	if *usernameFlag != "" || *passwordFlag != "" {
+		cred := musiko.Credentials{Username: *usernameFlag, Password: *passwordFlag}
+		client, err = musiko.NewClient(cred)
+	} else {
+		client, err = musiko.CreateClient()
+	}
+	if err != nil {
+		log.Fatalln("client creation error:", err)
 	}
 
-	s, err := musiko.NewStream(cred, *stationFlag, true)
+	stationId, err := client.GetOrCreateStation(*stationFlag)
+	if err != nil {
+		log.Fatalln("station creation error:", err)
+	}
+
+	s, err := musiko.NewStream(client, stationId, true)
 	if err != nil {
 		log.Fatalln("stream creation error:", err)
 	}
