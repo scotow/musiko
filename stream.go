@@ -192,7 +192,7 @@ func (s *Stream) Start() (<-chan error, error) {
 	s.pauseChan = make(chan struct{})
 	s.resumeChan = make(chan struct{})
 
-	go s.autoRemove()
+	go s.queueLoop()
 	s.state = running
 
 	log.Println("Stream started.")
@@ -304,7 +304,9 @@ func (s *Stream) queueNextPlaylist() error {
 	return errCommon
 }
 
-func (s *Stream) autoRemove() {
+func (s *Stream) queueLoop() {
+	fetchFailed := make(chan struct{})
+
 	for {
 		s.RLock()
 		if len(s.queue) == 0 {
@@ -327,6 +329,8 @@ func (s *Stream) autoRemove() {
 		case <-time.After(time.Duration(part.Duration * float64(time.Second))):
 		case <-s.pauseChan:
 			<-s.resumeChan
+		case <-fetchFailed:
+			return
 		}
 
 		s.Lock()
@@ -351,6 +355,7 @@ func (s *Stream) autoRemove() {
 				err := s.queueNextPlaylist()
 				if err != nil {
 					s.globalError(err)
+					fetchFailed <- struct{}{}
 				}
 			}()
 		}
