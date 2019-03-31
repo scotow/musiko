@@ -19,8 +19,8 @@ const (
 )
 
 var (
-	pause  *timeout.AutoPauser
-	stream *musiko.Stream
+	autoPause *timeout.AutoPauser
+	stream    *musiko.Stream
 )
 
 // TODO: Use station name rather than ID.
@@ -43,13 +43,13 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 	if r.RequestURI == "/playlist.m3u8" {
 		handlePlaylist(w, r)
-		pause.Reset()
+		autoPause.Reset()
 		return
 	}
 
 	if strings.HasSuffix(r.RequestURI, ".ts") {
 		handlePart(w, r)
-		pause.Reset()
+		autoPause.Reset()
 		return
 	}
 
@@ -114,8 +114,11 @@ func main() {
 	}
 
 	// Setup the auto-timeout.
-	pause = timeout.NewAutoPauser(stream, pauseTimeout, pauseTick)
-	go pause.Start()
+	autoPause = timeout.NewAutoPauser(stream, pauseTimeout, pauseTick)
+	timeoutErr := make(chan error)
+	go func() {
+		timeoutErr <- autoPause.Start()
+	}()
 
 	// Start HTTP server.
 	httpErr := make(chan error)
@@ -129,8 +132,8 @@ func main() {
 
 	select {
 	case err = <-streamErr:
+	case err = <-timeoutErr:
 	case err = <-httpErr:
-		stream.Pause()
 	}
 
 	log.Fatalln(err)

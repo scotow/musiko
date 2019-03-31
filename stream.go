@@ -15,11 +15,21 @@ import (
 )
 
 const (
-	playlistSize = 6
-	fetchLimit   = 64
+	playlistSize = 6  // About 60 sec of music.
+	fetchLimit   = 64 // About 10 min of music.
+)
+
+const (
+	stopped = iota
+	running
+	paused
+	killed
 )
 
 var (
+	ErrStreamAlreadyStarted = errors.New("stream cannot be started")
+	ErrStreamNotRunning     = errors.New("stream not running")
+	ErrStreamNotPaused      = errors.New("stream not paused")
 	//ErrPartsDirNotFound     = errors.New("parts directory doesn't exist")
 	ErrNoTracksFound        = errors.New("no tracks found")
 	ErrPlaylistEmpty        = errors.New("the playlist is empty")
@@ -42,10 +52,10 @@ type Credentials struct {
 	Password string
 }
 
-func NewStream(cred Credentials, station string, proxyless bool) (*Stream, error) {
+func NewStream(cred Credentials, station string, proxyLess bool) (*Stream, error) {
 	stream := new(Stream)
 
-	if proxyless {
+	if proxyLess {
 		stream.httpClient = httpClientNoProxy()
 	} else {
 		stream.httpClient = http.DefaultClient
@@ -92,7 +102,7 @@ func httpClientNoProxy() *http.Client {
 }
 
 type Stream struct {
-	//running  bool
+	state   uint
 	station string
 
 	httpClient *http.Client
@@ -163,6 +173,10 @@ func (s *Stream) highQualityTracks() ([]*Track, error) {
 }
 
 func (s *Stream) Start() (<-chan error, error) {
+	if s.state != stopped {
+		return nil, ErrStreamAlreadyStarted
+	}
+
 	log.Println("Starting stream...")
 
 	errChan := make(chan error)
@@ -179,19 +193,34 @@ func (s *Stream) Start() (<-chan error, error) {
 	s.resumeChan = make(chan struct{})
 
 	go s.autoRemove()
+	s.state = running
 
 	log.Println("Stream started.")
 	return errChan, nil
 }
 
-func (s *Stream) Pause() {
+func (s *Stream) Pause() error {
+	if s.state != running {
+		return ErrStreamNotRunning
+	}
+
 	s.pauseChan <- struct{}{}
+	s.state = paused
+
 	log.Println("Stream paused.")
+	return nil
 }
 
-func (s *Stream) Resume() {
+func (s *Stream) Resume() error {
+	if s.state != paused {
+		return ErrStreamNotPaused
+	}
+
 	s.resumeChan <- struct{}{}
+	s.state = running
+
 	log.Println("Stream resumed.")
+	return nil
 }
 
 func (s *Stream) shouldFetchPlaylist() bool {
@@ -280,14 +309,14 @@ func (s *Stream) autoRemove() {
 		s.RLock()
 		if len(s.queue) == 0 {
 			s.RUnlock()
-			s.errChan <- ErrPlaylistEmpty
+			s.globalError(ErrPlaylistEmpty)
 			return
 		}
 
 		part := s.queue[0]
 		if part == nil {
 			s.RUnlock()
-			s.errChan <- ErrInvalidPlaylistEntry
+			s.globalError(ErrInvalidPlaylistEntry)
 			return
 		}
 		s.RUnlock()
@@ -304,7 +333,7 @@ func (s *Stream) autoRemove() {
 		err := s.playlist.Remove()
 		if err != nil {
 			s.Unlock()
-			s.errChan <- err
+			s.globalError(err)
 			return
 		}
 
@@ -321,11 +350,16 @@ func (s *Stream) autoRemove() {
 			go func() {
 				err := s.queueNextPlaylist()
 				if err != nil {
-					s.errChan <- err
+					s.globalError(err)
 				}
 			}()
 		}
 	}
+}
+
+func (s *Stream) globalError(err error) {
+	s.state = killed
+	s.errChan <- err
 }
 
 func (s *Stream) WritePlaylist(writer io.Writer) error {

@@ -3,11 +3,11 @@ package timeout
 import "time"
 
 type Pausable interface {
-	Pause()
+	Pause() error
 }
 
 type Resumable interface {
-	Resume()
+	Resume() error
 }
 
 type PauseResumable interface {
@@ -34,7 +34,7 @@ func NewAutoPauser(instance PauseResumable, timeout, tick time.Duration) *AutoPa
 	return nap
 }
 
-func (ap *AutoPauser) Start() {
+func (ap *AutoPauser) Start() error {
 	ticker := time.NewTicker(ap.tick)
 	ap.last = time.Now()
 
@@ -42,16 +42,23 @@ func (ap *AutoPauser) Start() {
 		select {
 		case now := <-ticker.C:
 			if now.After(ap.last.Add(ap.timeout)) {
+				// Stop the ticker and pause the stream.
 				ticker.Stop()
-				ap.instance.Pause()
+				err := ap.instance.Pause()
+				if err != nil {
+					return err
+				}
 
 				// Wait for resume.
 				<-ap.resetChan
 
-				// Set last reset time, resume instance and reset the ticker.
+				// Set last reset time, resume instance and restart the ticker.
 				ap.last = time.Now()
+				err = ap.instance.Resume()
+				if err != nil {
+					return err
+				}
 				ticker = time.NewTicker(ap.tick)
-				ap.instance.Resume()
 			}
 		case <-ap.resetChan:
 			ap.last = time.Now()
