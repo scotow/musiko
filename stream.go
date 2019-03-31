@@ -7,23 +7,34 @@ import (
 	"github.com/cellofellow/gopiano/responses"
 	"github.com/grafov/m3u8"
 	"io"
+	"log"
 	"net"
 	"net/http"
-	"os"
-	"path"
 	"sync"
 	"time"
 )
 
 const (
-	playlistSize = 6
+	playlistSize = 6  // About 60 sec of music.
+	fetchLimit   = 64 // About 10 min of music.
+)
+
+const (
+	stopped = iota
+	running
+	paused
+	killed
 )
 
 var (
-	ErrPartsDirNotFound     = errors.New("parts directory doesn't exist")
+	ErrStreamAlreadyStarted = errors.New("stream cannot be started")
+	ErrStreamNotRunning     = errors.New("stream not running")
+	ErrStreamNotPaused      = errors.New("stream not paused")
+	//ErrPartsDirNotFound     = errors.New("parts directory doesn't exist")
 	ErrNoTracksFound        = errors.New("no tracks found")
 	ErrPlaylistEmpty        = errors.New("the playlist is empty")
 	ErrInvalidPlaylistEntry = errors.New("playlist contains a nil entry")
+	ErrPartNotFound         = errors.New("part not found")
 )
 
 var (
@@ -41,16 +52,10 @@ type Credentials struct {
 	Password string
 }
 
-func NewStream(cred Credentials, partsDir string, proxyless bool) (*Stream, error) {
+func NewStream(cred Credentials, station string, proxyLess bool) (*Stream, error) {
 	stream := new(Stream)
 
-	_, err := os.Stat(partsDir)
-	if os.IsNotExist(err) {
-		return nil, ErrPartsDirNotFound
-	}
-	stream.partsDir = partsDir
-
-	if proxyless {
+	if proxyLess {
 		stream.httpClient = httpClientNoProxy()
 	} else {
 		stream.httpClient = http.DefaultClient
@@ -67,6 +72,14 @@ func NewStream(cred Credentials, partsDir string, proxyless bool) (*Stream, erro
 	if err != nil {
 		return nil, err
 	}
+
+	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 256)
+	if err != nil {
+		return nil, err
+	}
+	stream.playlist = playlist
+	stream.parts = make(map[string][]byte)
+	stream.station = station
 
 	return stream, nil
 }
@@ -89,18 +102,22 @@ func httpClientNoProxy() *http.Client {
 }
 
 type Stream struct {
-	partsDir string
-	running  bool
-	station  string
+	state   uint
+	station string
 
 	httpClient *http.Client
 	client     *gopiano.Client
 	cred       Credentials
 
-	tracks   []*Track
-	parts    []*m3u8.MediaSegment
+	errChan    chan<- error
+	pauseChan  chan struct{}
+	resumeChan chan struct{}
+
+	queue    []*m3u8.MediaSegment
+	parts    map[string][]byte
 	playlist *m3u8.MediaPlaylist
 
+	fetching bool
 	sync.RWMutex
 }
 
@@ -142,7 +159,7 @@ func (s *Stream) highQualityTracks() ([]*Track, error) {
 	for _, item := range resp.Result.Items {
 		for _, quality := range qualitiesOrder {
 			if item, exists := item.AudioURLMap[quality]; exists {
-				tracks = append(tracks, NewTrack(item.AudioURL))
+				tracks = append(tracks, NewTrack(item.AudioURL, s.httpClient))
 				break
 			}
 		}
@@ -155,155 +172,229 @@ func (s *Stream) highQualityTracks() ([]*Track, error) {
 	return tracks, nil
 }
 
-func (s *Stream) nextTrack() (*Track, error) {
-	s.Lock()
+func (s *Stream) Start() (<-chan error, error) {
+	if s.state != stopped {
+		return nil, ErrStreamAlreadyStarted
+	}
 
-	if len(s.tracks) == 0 {
-		tracks, err := s.highQualityTracks()
+	log.Println("Starting stream...")
+
+	errChan := make(chan error)
+	s.errChan = errChan
+
+	if s.shouldFetchPlaylist() {
+		err := s.queueNextPlaylist()
 		if err != nil {
 			return nil, err
 		}
-
-		s.tracks = tracks
 	}
 
-	track := s.tracks[0]
-	s.tracks = s.tracks[1:]
+	s.pauseChan = make(chan struct{})
+	s.resumeChan = make(chan struct{})
 
-	s.Unlock()
+	go s.queueLoop()
+	s.state = running
 
-	return track, nil
+	log.Println("Stream started.")
+	return errChan, nil
 }
 
-func (s *Stream) queueNextTrack() error {
-	next, err := s.nextTrack()
-	if err != nil {
-		return err
+func (s *Stream) Pause() error {
+	if s.state != running {
+		return ErrStreamNotRunning
 	}
 
-	playlist, err := next.SplitTS(s.partsDir, false, s.httpClient)
+	s.pauseChan <- struct{}{}
+	s.state = paused
 
-	s.Lock()
-	defer s.Unlock()
-
-	for i, part := range playlist.Segments {
-		if part == nil {
-			break
-		}
-
-		err := s.playlist.AppendSegment(part)
-		if err != nil {
-			return err
-		}
-
-		// Set Discontinuity tag for the new part.
-		if i == 0 {
-			err = s.playlist.SetDiscontinuity()
-			if err != nil {
-				return err
-			}
-		}
-
-		// Append the part to the list.
-		s.parts = append(s.parts, part)
-	}
-
+	log.Println("Stream paused.")
 	return nil
 }
 
-func (s *Stream) Start(station string, c chan<- error) error {
-	s.Lock()
-
-	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 128)
-	if err != nil {
-		return err
+func (s *Stream) Resume() error {
+	if s.state != paused {
+		return ErrStreamNotPaused
 	}
 
-	s.station = station
-	s.playlist = playlist
-	s.parts = nil
+	s.resumeChan <- struct{}{}
+	s.state = running
 
-	s.Unlock()
-
-	err = s.queueNextTrack()
-	if err != nil {
-		return err
-	}
-
-	go s.autoRemove(c)
-
+	log.Println("Stream resumed.")
 	return nil
 }
 
-func (s *Stream) Stop() error {
-	s.Lock()
-	for _, part := range s.parts {
-		err := os.Remove(path.Join(s.partsDir, part.URI))
-		if err != nil {
-			return err
-		}
-	}
-	s.Unlock()
+func (s *Stream) shouldFetchPlaylist() bool {
+	s.RLock()
+	defer s.RUnlock()
 
-	return nil
+	return len(s.queue) <= fetchLimit && !s.fetching
 }
 
-func (s *Stream) autoRemove(error chan<- error) {
-	for {
+func (s *Stream) queueNextPlaylist() error {
+	s.Lock()
+	s.fetching = true
+	s.Unlock()
+
+	// Unlock fetching on exit.
+	defer func() {
 		s.Lock()
-		if len(s.parts) == 0 {
-			s.Unlock()
-			error <- ErrPlaylistEmpty
+		s.fetching = false
+		s.Unlock()
+	}()
+
+	log.Println("Queuing a new playlist.")
+
+	tracks, err := s.highQualityTracks()
+	if err != nil {
+		return err
+	}
+
+	var (
+		wg        sync.WaitGroup
+		errCommon error
+	)
+	wg.Add(len(tracks))
+
+	for _, track := range tracks {
+		go func(t *Track) {
+			defer wg.Done()
+
+			playlist, parts, err := t.GetParts()
+			if err != nil {
+				errCommon = err
+				return
+			}
+
+			log.Printf("Track fetched and split (%s).\n", t.id.String())
+
+			s.Lock()
+			defer s.Unlock()
+
+			for i, seg := range playlist.Segments {
+				if seg == nil {
+					break
+				}
+
+				err := s.playlist.AppendSegment(seg)
+				if err != nil {
+					errCommon = err
+					return
+				}
+
+				// Set Discontinuity tag for the first part.
+				if i == 0 {
+					err = s.playlist.SetDiscontinuity()
+					if err != nil {
+						errCommon = err
+						return
+					}
+				}
+
+				s.parts[seg.URI] = parts[i]
+				s.queue = append(s.queue, seg)
+			}
+
+			log.Printf("Track added to main playlist (%s).\n", track.id.String())
+		}(track)
+	}
+
+	wg.Wait()
+
+	log.Println("New playlist queued.")
+	return errCommon
+}
+
+func (s *Stream) queueLoop() {
+	fetchFailed := make(chan struct{})
+
+	for {
+		s.RLock()
+		if len(s.queue) == 0 {
+			s.RUnlock()
+			s.globalError(ErrPlaylistEmpty)
 			return
 		}
 
-		part := s.parts[0]
+		part := s.queue[0]
 		if part == nil {
-			s.Unlock()
-			error <- ErrInvalidPlaylistEntry
+			s.RUnlock()
+			s.globalError(ErrInvalidPlaylistEntry)
 			return
 		}
-		s.Unlock()
+		s.RUnlock()
 
 		// TODO: Use time difference for removal.
-		// Wait for chunk to be played.
-		time.Sleep(time.Duration(part.Duration * float64(time.Second)))
+		// Wait for chunk to be played or stop message.
+		select {
+		case <-time.After(time.Duration(part.Duration * float64(time.Second))):
+		case <-s.pauseChan:
+			<-s.resumeChan
+		case <-fetchFailed:
+			return
+		}
 
 		s.Lock()
 		err := s.playlist.Remove()
 		if err != nil {
 			s.Unlock()
-			error <- err
+			s.globalError(err)
 			return
 		}
 
-		// Remove part from disk.
-		err = os.Remove(path.Join(s.partsDir, part.URI))
-		if err != nil {
-			s.Unlock()
-			error <- err
-			return
-		}
+		// Shift removed part and remove it from part map.
+		s.queue[0] = nil
+		s.queue = s.queue[1:]
+		delete(s.parts, part.URI)
 
-		// Shift removed part.
-		s.parts = s.parts[1:]
 		s.Unlock()
 
-		if s.playlist.Count() <= playlistSize {
-			err = s.queueNextTrack()
-			if err != nil {
-				error <- err
-				return
-			}
+		// TODO: Use song duration rather than part count.
+		if s.shouldFetchPlaylist() {
+			log.Printf("Playlist almost empty (%d).\n", len(s.queue))
+			go func() {
+				err := s.queueNextPlaylist()
+				if err != nil {
+					s.globalError(err)
+					fetchFailed <- struct{}{}
+				}
+			}()
 		}
 	}
 }
 
-// TODO: Can this block the stream for too long?
+func (s *Stream) globalError(err error) {
+	s.state = killed
+	s.errChan <- err
+}
+
 func (s *Stream) WritePlaylist(writer io.Writer) error {
 	s.RLock()
-	_, err := io.Copy(writer, s.playlist.Encode())
+
+	// TODO: Use a inner cache.
+	// Copy playlist data to a temporary buffer.
+	buffer := s.playlist.Encode().Bytes()
+	data := make([]byte, len(buffer))
+	copy(data, buffer)
+
+	// Unlock here to allow long writing.
 	s.RUnlock()
 
+	_, err := writer.Write(data)
+	return err
+}
+
+func (s *Stream) WritePart(writer io.Writer, name string) error {
+	s.RLock()
+
+	part, exists := s.parts[name]
+	if !exists {
+		s.RUnlock()
+		return ErrPartNotFound
+	}
+
+	// Unlock here to allow long writing.
+	s.RUnlock()
+
+	_, err := writer.Write(part)
 	return err
 }
