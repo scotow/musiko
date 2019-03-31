@@ -371,6 +371,7 @@ func (s *Stream) WritePlaylist(writer io.Writer) error {
 	data := make([]byte, len(buffer))
 	copy(data, buffer)
 
+	// Unlock here to allow long writing.
 	s.RUnlock()
 
 	_, err := writer.Write(data)
@@ -382,6 +383,7 @@ func (s *Stream) WritePart(writer io.Writer, name string) error {
 
 	part, exists := s.parts[name]
 	if !exists {
+		s.RUnlock()
 		return ErrPartNotFound
 	}
 
