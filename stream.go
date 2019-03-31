@@ -306,6 +306,7 @@ func (s *Stream) autoRemove() {
 		}
 
 		// Shift removed part and remove it from part map.
+		s.queue[0] = nil
 		s.queue = s.queue[1:]
 		delete(s.parts, part.URI)
 
