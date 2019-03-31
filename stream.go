@@ -206,6 +206,13 @@ func (s *Stream) queueNextPlaylist() error {
 	s.fetching = true
 	s.Unlock()
 
+	// Unlock fetching on exit.
+	defer func() {
+		s.Lock()
+		s.fetching = false
+		s.Unlock()
+	}()
+
 	log.Println("Queuing a new playlist.")
 
 	tracks, err := s.highQualityTracks()
@@ -245,7 +252,7 @@ func (s *Stream) queueNextPlaylist() error {
 					return
 				}
 
-				// Set Discontinuity tag for the new part.
+				// Set Discontinuity tag for the first part.
 				if i == 0 {
 					err = s.playlist.SetDiscontinuity()
 					if err != nil {
@@ -263,10 +270,6 @@ func (s *Stream) queueNextPlaylist() error {
 	}
 
 	wg.Wait()
-
-	s.Lock()
-	s.fetching = false
-	s.Unlock()
 
 	log.Println("New playlist queued.")
 	return errCommon
