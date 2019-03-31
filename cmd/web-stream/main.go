@@ -3,17 +3,23 @@ package main
 import (
 	"flag"
 	"github.com/scotow/musiko"
+	"github.com/scotow/musiko/timeout"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
 	alternativeStation = "4162959307923849796"
+
+	pauseTimeout = 90 * time.Second
+	pauseTick    = 15 * time.Second
 )
 
 var (
+	pause  *timeout.AutoPauser
 	stream *musiko.Stream
 )
 
@@ -37,11 +43,13 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 	if r.RequestURI == "/playlist.m3u8" {
 		handlePlaylist(w, r)
+		pause.Reset()
 		return
 	}
 
 	if strings.HasSuffix(r.RequestURI, ".ts") {
 		handlePart(w, r)
+		pause.Reset()
 		return
 	}
 
@@ -100,14 +108,17 @@ func main() {
 	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
 	http.HandleFunc("/", handle)
 
-	httpErr := make(chan error)
-
 	streamErr, err := stream.Start()
 	if err != nil {
 		log.Fatalln("start stream error:", err)
 	}
 
+	// Setup the auto-timeout.
+	pause = timeout.NewAutoPauser(stream, pauseTimeout, pauseTick)
+	go pause.Start()
+
 	// Start HTTP server.
+	httpErr := make(chan error)
 	go func() {
 		listeningAddress := ":" + strconv.Itoa(*portFlag)
 		log.Println("Listening at", listeningAddress)
