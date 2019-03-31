@@ -63,7 +63,7 @@ func NewStream(cred Credentials, station string, proxyless bool) (*Stream, error
 		return nil, err
 	}
 
-	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 1024)
+	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 256)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +295,6 @@ func (s *Stream) autoRemove() {
 		case <-time.After(time.Duration(part.Duration * float64(time.Second))):
 		case <-s.pauseChan:
 			<-s.resumeChan
-			return
 		}
 
 		s.Lock()
@@ -325,7 +324,6 @@ func (s *Stream) autoRemove() {
 	}
 }
 
-// TODO: Can this block the stream for too long if the client is slow?
 func (s *Stream) WritePlaylist(writer io.Writer) error {
 	s.RLock()
 
