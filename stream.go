@@ -30,7 +30,6 @@ var (
 	ErrStreamAlreadyStarted = errors.New("stream cannot be started")
 	ErrStreamNotRunning     = errors.New("stream not running")
 	ErrStreamNotPaused      = errors.New("stream not paused")
-	//ErrPartsDirNotFound     = errors.New("parts directory doesn't exist")
 	ErrNoTracksFound        = errors.New("no tracks found")
 	ErrPlaylistEmpty        = errors.New("the playlist is empty")
 	ErrInvalidPlaylistEntry = errors.New("playlist contains a nil entry")
