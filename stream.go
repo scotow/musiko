@@ -186,12 +186,12 @@ func (s *Stream) Start() (<-chan error, error) {
 
 func (s *Stream) Pause() {
 	s.pauseChan <- struct{}{}
-	log.Println("Steam paused.")
+	log.Println("Stream paused.")
 }
 
 func (s *Stream) Resume() {
 	s.resumeChan <- struct{}{}
-	log.Println("Steam resumed.")
+	log.Println("Stream resumed.")
 }
 
 func (s *Stream) shouldFetchPlaylist() bool {
