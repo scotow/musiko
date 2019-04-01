@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css?family=Gloria+Hallelujah');
+@import url('https://fonts.googleapis.com/css?family=Source+Sans+Pro');
 
 html, body {
     height: 100%;
@@ -40,6 +41,28 @@ body::before {
     top: 0;
     left: 0;
     background: #15b154;
+}
+
+.stations {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    margin-top: 12px;
+}
+
+.stations > .station {
+    color: white;
+    font-size: 18px;
+    font-family: 'Source Sans Pro', sans-serif;
+    text-decoration: none;
+}
+
+.player {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
 }
 
 #title {
@@ -92,7 +115,7 @@ body::before {
     cursor: pointer;
 }
 
-#volume > #slider {
+#slider {
     width: 260px;
     height: 8px;
     background: #555;
@@ -106,11 +129,11 @@ body::before {
     appearance: none;
 }
 
-#volume > #slider:hover, #volume > #slider:active {
+#slider:hover, #slider:active {
     transform: scaleY(1.7);
 }
 
-#volume > #slider::-webkit-slider-thumb {
+#slider::-webkit-slider-thumb {
     width: 20px;
     height: 20px;
     background: white;
@@ -123,7 +146,7 @@ body::before {
     appearance: none;
 }
 
-#volume > #slider::-moz-range-thumb {
+#slider::-moz-range-thumb {
     width: 20px;
     height: 20px;
     background: white;

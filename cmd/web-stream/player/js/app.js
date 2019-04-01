@@ -2,7 +2,8 @@ let audio = document.getElementById('audio');
 let animation = document.getElementById('animation');
 let slider = document.getElementById('slider');
 
-let playlistURL = '/playlist.m3u8';
+let defaultStation = 'alternative';
+//let playlistURL = '/playlist.m3u8';
 
 let pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
 let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
@@ -13,14 +14,12 @@ let volumeTimeout = null;
 if (Hls.isSupported()) {
     loadCookieVolume();
 
-    let hls = new Hls();
-    hls.loadSource(playlistURL);
-    hls.attachMedia(audio);
-
-    hls.on(Hls.Events.MANIFEST_PARSED, function() {
-        audio.play();
-        updatePlayPauseButton();
-    });
+    window.onhashchange = function () {
+        if (!window.location.hash) {
+            return;
+        }
+        loadStation(window.location.hash);
+    };
 
     document.body.onkeyup = function(e) {
         if (e.key === ' ') togglePlayPause();
@@ -30,8 +29,23 @@ if (Hls.isSupported()) {
     document.getElementById('slider').oninput = volumeSliderChanged;
     document.getElementById('volume-down').onclick = volumeDown;
     document.getElementById('volume-up').onclick = volumeUp;
+
+    if (!window.location.hash) {
+        window.location.hash = defaultStation;
+    }
 } else {
-    window.location = playlistURL;
+    window.location = '/playlist.m3u8';
+}
+
+function loadStation(station) {
+    let hls = new Hls();
+    hls.loadSource(station + '.m3u8');
+    hls.attachMedia(audio);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, function() {
+        audio.play();
+        updatePlayPauseButton();
+    });
 }
 
 function togglePlayPause() {

@@ -13,6 +13,7 @@ import (
 
 const (
 	alternativeStation = "G18"
+	hipHopChillStation = "G1761"
 
 	pauseTimeout = 90 * time.Second
 	pauseTick    = 15 * time.Second
@@ -22,6 +23,11 @@ var (
 	autoPause *timeout.AutoPauser
 	stream    *musiko.Stream
 )
+
+type station struct {
+	autoPause *timeout.AutoPauser
+	stream    *musiko.Stream
+}
 
 // TODO: Use station name rather than ID.
 var (
@@ -85,6 +91,10 @@ func handlePart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+}
+
+func addStation(client *musiko.Client, station string) {
+
 }
 
 func main() {
