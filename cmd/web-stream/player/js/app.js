@@ -11,14 +11,17 @@ let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
 let volumeVariation = 0.15;
 let volumeTimeout = null;
 
+let lastHls = null;
+
 if (Hls.isSupported()) {
     loadCookieVolume();
 
+    if (!window.location.hash) {
+        window.location.hash = defaultStation;
+    }
+
     window.onhashchange = function () {
-        if (!window.location.hash) {
-            return;
-        }
-        loadStation(window.location.hash);
+        loadStationHash();
     };
 
     document.body.onkeyup = function(e) {
@@ -30,22 +33,34 @@ if (Hls.isSupported()) {
     document.getElementById('volume-down').onclick = volumeDown;
     document.getElementById('volume-up').onclick = volumeUp;
 
-    if (!window.location.hash) {
-        window.location.hash = defaultStation;
-    }
+    loadStationHash();
 } else {
     window.location = '/playlist.m3u8';
 }
 
+function loadStationHash() {
+    if (!window.location.hash) {
+        return;
+    }
+    loadStation(window.location.hash.slice(1));
+}
+
 function loadStation(station) {
+    if (lastHls) {
+        lastHls.destroy();
+        lastHls = null;
+    }
+
     let hls = new Hls();
-    hls.loadSource(station + '.m3u8');
+    hls.loadSource('/' + station + '.m3u8');
     hls.attachMedia(audio);
 
     hls.on(Hls.Events.MANIFEST_PARSED, function() {
         audio.play();
         updatePlayPauseButton();
     });
+
+    lastHls = hls;
 }
 
 function togglePlayPause() {

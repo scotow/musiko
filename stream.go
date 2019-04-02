@@ -32,6 +32,8 @@ var (
 	ErrPartNotFound         = errors.New("part not found")
 )
 
+type PartURIModifier func(string) string
+
 func NewStream(client *Client, station string, proxyLess bool) (*Stream, error) {
 	stream := new(Stream)
 
@@ -90,27 +92,27 @@ type Stream struct {
 	parts    map[string][]byte
 	playlist *m3u8.MediaPlaylist
 
+	URIModifier PartURIModifier
+
 	fetching bool
 	sync.RWMutex
 }
 
-func (s *Stream) Start() (<-chan error, error) {
+func (s *Stream) Start(report chan<- error) error {
 	if s.state != stopped {
-		return nil, ErrStreamAlreadyStarted
+		return ErrStreamAlreadyStarted
 	}
 
 	log.Println("Starting stream...")
 
-	errChan := make(chan error)
-	s.errChan = errChan
-
 	if s.shouldFetchPlaylist() {
 		err := s.queueNextPlaylist()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
+	s.errChan = report
 	s.pauseChan = make(chan struct{})
 	s.resumeChan = make(chan struct{})
 
@@ -118,7 +120,7 @@ func (s *Stream) Start() (<-chan error, error) {
 	s.state = running
 
 	log.Println("Stream started.")
-	return errChan, nil
+	return nil
 }
 
 func (s *Stream) Pause() error {
@@ -212,6 +214,10 @@ func (s *Stream) queueNextPlaylist() error {
 					}
 				}
 
+				if s.URIModifier != nil {
+					seg.URI = s.URIModifier(seg.URI)
+				}
+
 				s.parts[seg.URI] = parts[i]
 				s.queue = append(s.queue, seg)
 			}
@@ -286,7 +292,9 @@ func (s *Stream) queueLoop() {
 
 func (s *Stream) globalError(err error) {
 	s.state = killed
-	s.errChan <- err
+	if s.errChan != nil {
+		s.errChan <- err
+	}
 }
 
 func (s *Stream) WritePlaylist(writer io.Writer) error {

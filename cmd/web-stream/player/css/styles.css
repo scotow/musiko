@@ -53,7 +53,7 @@ body::before {
 .stations > .station {
     color: white;
     font-size: 18px;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Gloria Hallelujah', sans-serif;
     text-decoration: none;
 }
 
@@ -65,7 +65,7 @@ body::before {
     flex-direction: column;
 }
 
-#title {
+.title {
     font-family: 'Gloria Hallelujah', sans-serif;
     font-size: 60px;
     cursor: default;

@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"github.com/pkg/errors"
 	"github.com/scotow/musiko"
 	"github.com/scotow/musiko/timeout"
 	"log"
@@ -19,22 +21,22 @@ const (
 	pauseTick    = 15 * time.Second
 )
 
-var (
-	autoPause *timeout.AutoPauser
-	stream    *musiko.Stream
-)
-
-type station struct {
-	autoPause *timeout.AutoPauser
-	stream    *musiko.Stream
+type radio struct {
+	name   string
+	stream *musiko.Stream
+	pause  *timeout.AutoPauser
 }
+
+var (
+	radios = make(map[string]*radio)
+)
 
 // TODO: Use station name rather than ID.
 var (
 	usernameFlag = flag.String("u", "", "Pandora username (or e-mail address)")
 	passwordFlag = flag.String("p", "", "Pandora password")
-	stationFlag  = flag.String("s", alternativeStation, "Pandora station ID")
-	portFlag     = flag.Int("P", 8080, "HTTP listening port")
+	//stationFlag  = flag.String("s", alternativeStation, "Pandora station ID")
+	portFlag = flag.Int("P", 8080, "HTTP listening port")
 )
 
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -47,15 +49,15 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.RequestURI == "/playlist.m3u8" {
+	if strings.HasSuffix(r.RequestURI, ".m3u8") {
 		handlePlaylist(w, r)
-		autoPause.Reset()
+		//autoPause.Reset()
 		return
 	}
 
 	if strings.HasSuffix(r.RequestURI, ".ts") {
 		handlePart(w, r)
-		autoPause.Reset()
+		//autoPause.Reset()
 		return
 	}
 
@@ -66,10 +68,17 @@ func shouldPlayer(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
-func handlePlaylist(w http.ResponseWriter, _ *http.Request) {
+func handlePlaylist(w http.ResponseWriter, r *http.Request) {
+	name := r.RequestURI[1 : len(r.RequestURI)-5]
+	radio, e := radios[name]
+	if !e {
+		http.NotFound(w, r)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 
-	err := stream.WritePlaylist(w)
+	err := radio.stream.WritePlaylist(w)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -77,24 +86,64 @@ func handlePlaylist(w http.ResponseWriter, _ *http.Request) {
 }
 
 func handlePart(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "video/mp2t")
-
-	var part string
+	/*var part string
 	if strings.HasPrefix(r.RequestURI, "/") {
 		part = r.RequestURI[1:]
 	} else {
 		part = r.RequestURI
+	}*/
+
+	split := strings.SplitN(r.RequestURI, ".", 2)
+	if len(split) != 2 {
+		http.NotFound(w, r)
+		return
 	}
 
-	err := stream.WritePart(w, part)
+	name := split[0][1:]
+	radio, e := radios[name]
+	if !e {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "video/mp2t")
+
+	err := radio.stream.WritePart(w, r.RequestURI[1:])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+
+	radio.pause.Reset()
 }
 
-func addStation(client *musiko.Client, station string) {
+func createRadio(client *musiko.Client, station string, name string, report chan<- error) error {
+	stationId, err := client.GetOrCreateStation(station)
+	if err != nil {
+		return errors.New(fmt.Sprint("station creation error:", err.Error()))
+	}
 
+	stream, err := musiko.NewStream(client, stationId, true)
+	if err != nil {
+		return errors.New(fmt.Sprint("stream creation error:", err.Error()))
+	}
+
+	stream.URIModifier = func(s string) string {
+		return fmt.Sprintf("%s.%s", name, s)
+	}
+
+	err = stream.Start(report)
+	if err != nil {
+		return errors.New(fmt.Sprint("start stream error:", err.Error()))
+	}
+
+	pause := timeout.NewAutoPauser(stream, pauseTimeout, pauseTick)
+	go func() {
+		report <- pause.Start()
+	}()
+
+	radios[name] = &radio{name, stream, pause}
+	return nil
 }
 
 func main() {
@@ -104,62 +153,35 @@ func main() {
 		log.Fatalln("ffmpeg not installed or cannot be found")
 	}
 
-	var (
-		client *musiko.Client
-		err    error
-	)
-
-	if *usernameFlag != "" || *passwordFlag != "" {
-		cred := musiko.Credentials{Username: *usernameFlag, Password: *passwordFlag}
-		client, err = musiko.NewClient(cred)
-	} else {
-		client, err = musiko.CreateClient()
-	}
+	cred := musiko.Credentials{Username: *usernameFlag, Password: *passwordFlag}
+	client, err := musiko.NewClient(cred)
 	if err != nil {
 		log.Fatalln("client creation error:", err)
 	}
 
-	stationId, err := client.GetOrCreateStation(*stationFlag)
-	if err != nil {
-		log.Fatalln("station creation error:", err)
-	}
+	report := make(chan error)
 
-	s, err := musiko.NewStream(client, stationId, true)
+	err = createRadio(client, alternativeStation, "alternative", report)
 	if err != nil {
-		log.Fatalln("stream creation error:", err)
+		log.Fatalln(err)
 	}
-	stream = s
+	err = createRadio(client, hipHopChillStation, "lo-fi", report)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
 	http.HandleFunc("/", handle)
 
-	streamErr, err := stream.Start()
-	if err != nil {
-		log.Fatalln("start stream error:", err)
-	}
-
-	// Setup the auto-timeout.
-	autoPause = timeout.NewAutoPauser(stream, pauseTimeout, pauseTick)
-	timeoutErr := make(chan error)
-	go func() {
-		timeoutErr <- autoPause.Start()
-	}()
-
 	// Start HTTP server.
-	httpErr := make(chan error)
 	go func() {
 		listeningAddress := ":" + strconv.Itoa(*portFlag)
 		log.Println("Listening at", listeningAddress)
 
 		err := http.ListenAndServe(listeningAddress, nil)
-		httpErr <- err
+		report <- err
 	}()
 
-	select {
-	case err = <-streamErr:
-	case err = <-timeoutErr:
-	case err = <-httpErr:
-	}
-
+	err = <-report
 	log.Fatalln(err)
 }
