@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/pkg/errors"
@@ -14,14 +15,12 @@ import (
 )
 
 const (
-	alternativeStation = "G18"
-	hipHopChillStation = "G1761"
-
 	pauseTimeout = 90 * time.Second
 	pauseTick    = 15 * time.Second
 )
 
 type radio struct {
+	//id     string
 	name   string
 	stream *musiko.Stream
 	pause  *timeout.AutoPauser
@@ -31,12 +30,12 @@ var (
 	radios = make(map[string]*radio)
 )
 
-// TODO: Use station name rather than ID.
 var (
 	usernameFlag = flag.String("u", "", "Pandora username (or e-mail address)")
 	passwordFlag = flag.String("p", "", "Pandora password")
-	//stationFlag  = flag.String("s", alternativeStation, "Pandora station ID")
-	portFlag = flag.Int("P", 8080, "HTTP listening port")
+	portFlag     = flag.Int("P", 8080, "HTTP listening port")
+
+	stationsFlag configFlags
 )
 
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -51,13 +50,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasSuffix(r.RequestURI, ".m3u8") {
 		handlePlaylist(w, r)
-		//autoPause.Reset()
 		return
 	}
 
 	if strings.HasSuffix(r.RequestURI, ".ts") {
 		handlePart(w, r)
-		//autoPause.Reset()
 		return
 	}
 
@@ -66,6 +63,17 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 func shouldPlayer(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "text/html")
+}
+
+func handleStations(w http.ResponseWriter, r *http.Request) {
+	data, err := json.Marshal(stationsFlag)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(data)
 }
 
 func handlePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -117,15 +125,15 @@ func handlePart(w http.ResponseWriter, r *http.Request) {
 	radio.pause.Reset()
 }
 
-func createRadio(client *musiko.Client, station string, name string, report chan<- error) error {
-	stationId, err := client.GetOrCreateStation(station)
+func createRadio(client *musiko.Client, stationId string, name string, report chan<- error) error {
+	stationId, err := client.GetOrCreateStation(stationId)
 	if err != nil {
 		return errors.New(fmt.Sprint("station creation error:", err.Error()))
 	}
 
 	stream, err := musiko.NewStream(client, stationId, true)
 	if err != nil {
-		return errors.New(fmt.Sprint("stream creation error:", err.Error()))
+		return errors.New(fmt.Sprint("stream creation error: ", err.Error()))
 	}
 
 	stream.URIModifier = func(s string) string {
@@ -134,7 +142,7 @@ func createRadio(client *musiko.Client, station string, name string, report chan
 
 	err = stream.Start(report)
 	if err != nil {
-		return errors.New(fmt.Sprint("start stream error:", err.Error()))
+		return errors.New(fmt.Sprint("start stream error: ", err.Error()))
 	}
 
 	pause := timeout.NewAutoPauser(stream, pauseTimeout, pauseTick)
@@ -147,10 +155,15 @@ func createRadio(client *musiko.Client, station string, name string, report chan
 }
 
 func main() {
-	flag.Parse()
-
 	if !musiko.FfmpegInstalled() {
 		log.Fatalln("ffmpeg not installed or cannot be found")
+	}
+
+	flag.Var(&stationsFlag, "s", "Pandora stations with format \"display_name:genre_id\"")
+	flag.Parse()
+
+	if len(stationsFlag) < 1 {
+		log.Fatalln("missing station configs")
 	}
 
 	cred := musiko.Credentials{Username: *usernameFlag, Password: *passwordFlag}
@@ -161,16 +174,15 @@ func main() {
 
 	report := make(chan error)
 
-	err = createRadio(client, alternativeStation, "alternative", report)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	err = createRadio(client, hipHopChillStation, "lo-fi", report)
-	if err != nil {
-		log.Fatalln(err)
+	for _, station := range stationsFlag {
+		err = createRadio(client, station.id, station.Name, report)
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
 
 	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
+	http.HandleFunc("/stations", handleStations)
 	http.HandleFunc("/", handle)
 
 	// Start HTTP server.

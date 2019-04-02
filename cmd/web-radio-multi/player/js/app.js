@@ -2,9 +2,6 @@ let audio = document.getElementById('audio');
 let animation = document.getElementById('animation');
 let slider = document.getElementById('slider');
 
-let defaultStation = 'alternative';
-//let playlistURL = '/playlist.m3u8';
-
 let pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
 let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
 
@@ -13,29 +10,51 @@ let volumeTimeout = null;
 
 let lastHls = null;
 
-if (Hls.isSupported()) {
-    loadCookieVolume();
+fetch('/stations')
+    .then(resp => resp.json())
+    .then(data => stationsLoaded(data));
 
-    if (!window.location.hash) {
-        window.location.hash = defaultStation;
-    }
+function stationsLoaded(stations) {
+    if (Hls.isSupported()) {
+        displayStations(stations);
+        loadCookieVolume();
 
-    window.onhashchange = function () {
+        if (!window.location.hash) {
+            window.location.hash = stations[0].name;
+        }
+
+        window.onhashchange = function () {
+            loadStationHash();
+        };
+
+        document.body.onkeyup = function(e) {
+            if (e.key === ' ') togglePlayPause();
+        };
+
+        document.getElementById('play-pause').onclick = togglePlayPause;
+        document.getElementById('slider').oninput = volumeSliderChanged;
+        document.getElementById('volume-down').onclick = volumeDown;
+        document.getElementById('volume-up').onclick = volumeUp;
+
         loadStationHash();
-    };
+    } else {
+        window.location = playlistAddress(stations[0].name);
+    }
+}
 
-    document.body.onkeyup = function(e) {
-        if (e.key === ' ') togglePlayPause();
-    };
+function playlistAddress(station) {
+    return '/' + station + '.m3u8';
+}
 
-    document.getElementById('play-pause').onclick = togglePlayPause;
-    document.getElementById('slider').oninput = volumeSliderChanged;
-    document.getElementById('volume-down').onclick = volumeDown;
-    document.getElementById('volume-up').onclick = volumeUp;
-
-    loadStationHash();
-} else {
-    window.location = '/playlist.m3u8';
+function displayStations(stations) {
+    let listElem = document.getElementById('stations');
+    for (let station of stations) {
+        let stationElem = document.createElement('a');
+        stationElem.text = station.display;
+        stationElem.href = '#' + station.name;
+        stationElem.classList.add('station');
+        listElem.appendChild(stationElem);
+    }
 }
 
 function loadStationHash() {
