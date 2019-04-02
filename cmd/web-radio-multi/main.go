@@ -20,7 +20,6 @@ const (
 )
 
 type radio struct {
-	//id     string
 	name   string
 	stream *musiko.Stream
 	pause  *timeout.AutoPauser
@@ -43,7 +42,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		if shouldPlayer(r) {
 			http.Redirect(w, r, "/player", http.StatusFound)
 		} else {
-			http.Redirect(w, r, "/playlist.m3u8", http.StatusFound)
+			http.Redirect(w, r, fmt.Sprintf("/%s.m3u8", stationsFlag[0].Name), http.StatusFound)
 		}
 		return
 	}
