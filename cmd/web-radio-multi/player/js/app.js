@@ -37,6 +37,7 @@ function stationsLoaded(stations) {
         document.getElementById('volume-up').onclick = volumeUp;
 
         loadStationHash();
+        document.body.classList.remove('loading');
     } else {
         window.location = playlistAddress(stations[0].name);
     }
