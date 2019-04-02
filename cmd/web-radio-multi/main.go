@@ -93,13 +93,6 @@ func handlePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePart(w http.ResponseWriter, r *http.Request) {
-	/*var part string
-	if strings.HasPrefix(r.RequestURI, "/") {
-		part = r.RequestURI[1:]
-	} else {
-		part = r.RequestURI
-	}*/
-
 	split := strings.SplitN(r.RequestURI, ".", 2)
 	if len(split) != 2 {
 		http.NotFound(w, r)

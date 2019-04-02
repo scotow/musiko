@@ -69,6 +69,10 @@ func (t *Track) GetData() ([]byte, error) {
 	return data, nil
 }
 
+func (t *Track) ClearData() {
+	t.data = nil
+}
+
 // TODO: Use defer to remove parts on error.
 func (t *Track) GetParts() (*m3u8.MediaPlaylist, [][]byte, error) {
 	if t.playlist != nil && t.parts != nil {

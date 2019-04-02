@@ -189,6 +189,9 @@ func (s *Stream) queueNextPlaylist() error {
 				return
 			}
 
+			// Clear data to free some space.
+			t.ClearData()
+
 			log.Printf("Track fetched and split (%s).\n", t.id.String())
 
 			s.Lock()
@@ -214,10 +217,12 @@ func (s *Stream) queueNextPlaylist() error {
 					}
 				}
 
+				// Apply URI modifier if required.
 				if s.URIModifier != nil {
 					seg.URI = s.URIModifier(seg.URI)
 				}
 
+				// Store the part in the main lookup map and to the auto-remove queue.
 				s.parts[seg.URI] = parts[i]
 				s.queue = append(s.queue, seg)
 			}
@@ -301,7 +306,7 @@ func (s *Stream) WritePlaylist(writer io.Writer) error {
 	s.RLock()
 
 	// TODO: Use a inner cache.
-	// Copy playlist data to a temporary buffer.
+	// Copy playlist data to a temporary buffer because the writer can be slow.
 	buffer := s.playlist.Encode().Bytes()
 	data := make([]byte, len(buffer))
 	copy(data, buffer)
@@ -316,6 +321,7 @@ func (s *Stream) WritePlaylist(writer io.Writer) error {
 func (s *Stream) WritePart(writer io.Writer, name string) error {
 	s.RLock()
 
+	// Because we never alter the part's data we don't need to make a copy before writing.
 	part, exists := s.parts[name]
 	if !exists {
 		s.RUnlock()

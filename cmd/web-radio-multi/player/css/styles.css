@@ -56,6 +56,11 @@ body::before {
     font-size: 18px;
     font-family: 'Gloria Hallelujah', sans-serif;
     text-decoration: none;
+    transition: 125ms color;
+}
+
+.stations > .station.selected {
+    color: #15b154;
 }
 
 .player {

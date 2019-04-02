@@ -71,7 +71,7 @@ function loadStation(station) {
     }
 
     let hls = new Hls();
-    hls.loadSource('/' + station + '.m3u8');
+    hls.loadSource(playlistAddress(station));
     hls.attachMedia(audio);
 
     hls.on(Hls.Events.MANIFEST_PARSED, function() {
@@ -80,6 +80,14 @@ function loadStation(station) {
     });
 
     lastHls = hls;
+
+    for (let elem of document.querySelectorAll('.stations > .station')) {
+        if (elem.href.split('#')[1] === station) {
+            elem.classList.add('selected');
+        } else {
+            elem.classList.remove('selected');
+        }
+    }
 }
 
 function togglePlayPause() {
