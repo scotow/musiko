@@ -61,6 +61,7 @@ body::before {
 
 .stations > .station.selected {
     color: #15b154;
+    pointer-events: none;
 }
 
 .player {
