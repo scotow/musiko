@@ -46,11 +46,13 @@ body::before {
 .stations {
     display: flex;
     justify-content: space-around;
+    flex-wrap: wrap;
     width: 100%;
     margin-top: 12px;
 }
 
 .stations > .station {
+    padding: 0 8px;
     color: white;
     font-size: 18px;
     font-family: 'Gloria Hallelujah', sans-serif;
