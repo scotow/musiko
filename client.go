@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"net/http"
+	"sync"
 )
 
 var (
@@ -36,6 +37,7 @@ type Client struct {
 	httpClient *http.Client
 	client     *gopiano.Client
 	cred       Credentials
+	sync.Mutex
 }
 
 func NewClient(credentials Credentials) (*Client, error) {
@@ -64,6 +66,7 @@ func CreateClient() (*Client, error) {
 		return nil, err
 	}
 	client.client = pandora
+
 	client.cred = Credentials{
 		Username: fmt.Sprintf("%s@gmail.com", uuid.New().String()),
 		Password: uuid.New().String(),
@@ -88,6 +91,13 @@ func CreateClient() (*Client, error) {
 }
 
 func (c *Client) Auth() error {
+	c.Lock()
+	defer c.Unlock()
+
+	return c.auth()
+}
+
+func (c *Client) auth() error {
 	_, err := c.client.AuthPartnerLogin()
 	if err != nil {
 		return err
@@ -106,16 +116,19 @@ func (c *Client) Auth() error {
 }
 
 func (c *Client) doRequest(request Request) (interface{}, error) {
+	c.Lock()
+	defer c.Unlock()
+
 	resp, err := request()
 	if err != nil {
 		// Check if the error is a 'INVALID_AUTH_TOKEN' error, aka. 'token expired'.
 		if pErr, is := err.(responses.ErrorResponse); is && pErr.Code == 1001 {
-			err = c.Auth()
+			err = c.auth()
 			if err != nil {
 				return nil, err
 			}
 
-			// Retry playlist fetch.
+			// Retry the request.
 			resp, err = request()
 			if err != nil {
 				return nil, err

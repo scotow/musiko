@@ -64,7 +64,7 @@ func shouldPlayer(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
-func handleStations(w http.ResponseWriter, r *http.Request) {
+func handleStations(w http.ResponseWriter, _ *http.Request) {
 	data, err := json.Marshal(stationsFlag)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -2,6 +2,7 @@ package musiko
 
 import (
 	"errors"
+	"github.com/google/uuid"
 	"github.com/grafov/m3u8"
 	"io"
 	"log"
@@ -12,8 +13,9 @@ import (
 )
 
 const (
-	playlistSize = 6  // About 60 sec of music.
-	fetchLimit   = 64 // About 10 min of music.
+	playlistCapacity = 256
+	playlistSize     = 6  // About 60 sec of music.
+	fetchLimit       = 64 // About 10 min of music.
 )
 
 const (
@@ -37,25 +39,22 @@ type PartURIModifier func(string) string
 func NewStream(client *Client, station string, proxyLess bool) (*Stream, error) {
 	stream := new(Stream)
 
+	playlist, err := m3u8.NewMediaPlaylist(playlistSize, playlistCapacity)
+	if err != nil {
+		return nil, err
+	}
+	stream.playlist = playlist
+
+	stream.id = uuid.New()
+	stream.client = client
+	stream.parts = make(map[string][]byte)
+	stream.station = station
+
 	if proxyLess {
 		stream.httpClient = httpClientNoProxy()
 	} else {
 		stream.httpClient = http.DefaultClient
 	}
-
-	err := client.Auth()
-	if err != nil {
-		return nil, err
-	}
-	stream.client = client
-
-	playlist, err := m3u8.NewMediaPlaylist(playlistSize, 256)
-	if err != nil {
-		return nil, err
-	}
-	stream.playlist = playlist
-	stream.parts = make(map[string][]byte)
-	stream.station = station
 
 	return stream, nil
 }
@@ -78,6 +77,7 @@ func httpClientNoProxy() *http.Client {
 }
 
 type Stream struct {
+	id      uuid.UUID
 	state   uint
 	station string
 
@@ -103,7 +103,7 @@ func (s *Stream) Start(report chan<- error) error {
 		return ErrStreamAlreadyStarted
 	}
 
-	log.Println("Starting stream...")
+	log.Printf("Starting stream (%s).\n", s.id.String())
 
 	if s.shouldFetchPlaylist() {
 		err := s.queueNextPlaylist()
@@ -119,7 +119,7 @@ func (s *Stream) Start(report chan<- error) error {
 	go s.queueLoop()
 	s.state = running
 
-	log.Println("Stream started.")
+	log.Printf("Stream started (%s).\n", s.id.String())
 	return nil
 }
 
@@ -131,7 +131,7 @@ func (s *Stream) Pause() error {
 	s.pauseChan <- struct{}{}
 	s.state = paused
 
-	log.Println("Stream paused.")
+	log.Printf("Stream paused (%s).\n", s.id.String())
 	return nil
 }
 
@@ -143,7 +143,7 @@ func (s *Stream) Resume() error {
 	s.resumeChan <- struct{}{}
 	s.state = running
 
-	log.Println("Stream resumed.")
+	log.Printf("Stream resumed (%s).\n", s.id.String())
 	return nil
 }
 
@@ -166,7 +166,7 @@ func (s *Stream) queueNextPlaylist() error {
 		s.Unlock()
 	}()
 
-	log.Println("Queuing a new playlist.")
+	log.Printf("Queuing a new playlist (%s).\n", s.id.String())
 
 	tracks, err := s.client.HighQualityTracks(s.station, s.httpClient)
 	if err != nil {
@@ -179,20 +179,20 @@ func (s *Stream) queueNextPlaylist() error {
 	)
 	wg.Add(len(tracks))
 
-	for _, track := range tracks {
-		go func(t *Track) {
+	for _, t := range tracks {
+		go func(track *Track) {
 			defer wg.Done()
 
-			playlist, parts, err := t.GetParts()
+			playlist, parts, err := track.GetParts()
 			if err != nil {
 				errCommon = err
 				return
 			}
 
-			// Clear data to free some space.
-			t.ClearData()
+			// Remove reference to the original data to allow the GC to free it.
+			track.ClearData()
 
-			log.Printf("Track fetched and split (%s).\n", t.id.String())
+			log.Printf("Track fetched and split (%s).\n", track.id.String())
 
 			s.Lock()
 			defer s.Unlock()
@@ -227,13 +227,13 @@ func (s *Stream) queueNextPlaylist() error {
 				s.queue = append(s.queue, seg)
 			}
 
-			log.Printf("Track added to main playlist (%s).\n", t.id.String())
-		}(track)
+			log.Printf("Track added to main playlist (%s).\n", track.id.String())
+		}(t)
 	}
 
 	wg.Wait()
 
-	log.Println("New playlist queued.")
+	log.Printf("New playlist queued (%s).\n", s.id.String())
 	return errCommon
 }
 
@@ -242,6 +242,8 @@ func (s *Stream) queueLoop() {
 
 	for {
 		s.RLock()
+
+		// TODO: Cancel/Wait for new parts rather than 'throwing'.
 		if len(s.queue) == 0 {
 			s.RUnlock()
 			s.globalError(ErrPlaylistEmpty)
@@ -283,7 +285,7 @@ func (s *Stream) queueLoop() {
 
 		// TODO: Use song duration rather than part count.
 		if s.shouldFetchPlaylist() {
-			log.Printf("Playlist almost empty (%d).\n", len(s.queue))
+			log.Printf("Playlist almost empty: %d (%s).\n", len(s.queue), s.id.String())
 			go func() {
 				err := s.queueNextPlaylist()
 				if err != nil {
