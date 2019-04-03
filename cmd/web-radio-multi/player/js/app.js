@@ -23,16 +23,17 @@ function stationsLoaded(stations) {
             window.location.hash = stations[0].name;
         }
 
-        window.onhashchange = function () {
-            loadStationHash();
-        };
+        window.onhashchange = loadStationHash;
 
         document.body.onkeyup = function(e) {
             if (e.key === ' ') togglePlayPause();
         };
 
+        audio.onplay = updatePlayPauseButton;
+        audio.onpause = updatePlayPauseButton;
+        slider.oninput = volumeSliderChanged;
+
         document.getElementById('play-pause').onclick = togglePlayPause;
-        document.getElementById('slider').oninput = volumeSliderChanged;
         document.getElementById('volume-down').onclick = volumeDown;
         document.getElementById('volume-up').onclick = volumeUp;
 
@@ -51,17 +52,15 @@ function displayStations(stations) {
     let listElem = document.getElementById('stations');
     for (let station of stations) {
         let stationElem = document.createElement('a');
-        stationElem.text = station.display;
         stationElem.href = '#' + station.name;
         stationElem.classList.add('station');
+        stationElem.text = station.display;
         listElem.appendChild(stationElem);
     }
 }
 
 function loadStationHash() {
-    if (!window.location.hash) {
-        return;
-    }
+    if (!window.location.hash) return;
     loadStation(window.location.hash.slice(1));
 }
 
@@ -75,10 +74,7 @@ function loadStation(station) {
     hls.loadSource(playlistAddress(station));
     hls.attachMedia(audio);
 
-    hls.on(Hls.Events.MANIFEST_PARSED, function() {
-        audio.play();
-        updatePlayPauseButton();
-    });
+    hls.on(Hls.Events.MANIFEST_PARSED, audio.bind(audio));
 
     lastHls = hls;
 
@@ -93,7 +89,6 @@ function loadStation(station) {
 
 function togglePlayPause() {
     audio.paused ? audio.play() : audio.pause();
-    updatePlayPauseButton();
 }
 
 function updatePlayPauseButton() {
