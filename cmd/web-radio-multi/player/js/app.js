@@ -74,7 +74,7 @@ function loadStation(station) {
     hls.loadSource(playlistAddress(station));
     hls.attachMedia(audio);
 
-    hls.on(Hls.Events.MANIFEST_PARSED, audio.bind(audio));
+    hls.on(Hls.Events.MANIFEST_PARSED, audio.play.bind(audio));
 
     lastHls = hls;
 
