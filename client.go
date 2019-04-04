@@ -173,8 +173,9 @@ func (c *Client) HighQualityTracks(station string, httpClient *http.Client) ([]*
 	tracks := make([]*Track, 0, len(resp.Result.Items))
 	for _, item := range resp.Result.Items {
 		for _, quality := range qualitiesOrder {
-			if item, exists := item.AudioURLMap[quality]; exists {
-				tracks = append(tracks, NewTrack(item.AudioURL, httpClient))
+			if audio, exists := item.AudioURLMap[quality]; exists {
+				info := TrackInfo{item.ArtistName, item.AlbumName, item.SongName}
+				tracks = append(tracks, NewTrack(audio.AudioURL, info, httpClient))
 				break
 			}
 		}

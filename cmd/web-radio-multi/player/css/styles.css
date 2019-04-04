@@ -16,6 +16,7 @@ body {
     flex-direction: column;
     margin: 0;
     color: white;
+    font-family: 'Gloria Hallelujah', sans-serif;
     transition: opacity 500ms;
 
     -webkit-touch-callout: none;
@@ -51,7 +52,6 @@ body.loading {
     padding: 0 8px;
     color: white;
     font-size: 18px;
-    font-family: 'Gloria Hallelujah', sans-serif;
     text-decoration: none;
     transition: 125ms color;
 }
@@ -70,7 +70,6 @@ body.loading {
 }
 
 .title {
-    font-family: 'Gloria Hallelujah', sans-serif;
     font-size: 60px;
     cursor: default;
 }
@@ -104,6 +103,19 @@ body.loading {
 
 #play-pause-path {
     transform: translateX(-1px);
+}
+
+.song-info {
+    text-align: center;
+    margin-top: 18px;
+}
+
+.song-info > .info {
+    font-size: 18px;
+}
+
+.song-info > .info:first-child {
+    font-size: 26px;
 }
 
 #volume {

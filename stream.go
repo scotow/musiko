@@ -1,6 +1,7 @@
 package musiko
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/google/uuid"
 	"github.com/grafov/m3u8"
@@ -47,7 +48,7 @@ func NewStream(client *Client, station string, proxyLess bool) (*Stream, error) 
 
 	stream.id = uuid.New()
 	stream.client = client
-	stream.parts = make(map[string][]byte)
+	stream.parts = make(map[string]*Part)
 	stream.station = station
 
 	if proxyLess {
@@ -89,7 +90,7 @@ type Stream struct {
 	resumeChan chan struct{}
 
 	queue    []*m3u8.MediaSegment
-	parts    map[string][]byte
+	parts    map[string]*Part
 	playlist *m3u8.MediaPlaylist
 
 	URIModifier PartURIModifier
@@ -320,19 +321,41 @@ func (s *Stream) WritePlaylist(writer io.Writer) error {
 	return err
 }
 
-func (s *Stream) WritePart(writer io.Writer, name string) error {
+func (s *Stream) getPart(name string) (*Part, error) {
 	s.RLock()
+	defer s.RUnlock()
 
 	// Because we never alter the part's data we don't need to make a copy before writing.
 	part, exists := s.parts[name]
 	if !exists {
 		s.RUnlock()
-		return ErrPartNotFound
+		return nil, ErrPartNotFound
 	}
 
-	// Unlock here to allow long writing.
-	s.RUnlock()
+	return part, nil
+}
 
-	_, err := writer.Write(part)
+func (s *Stream) WritePartData(writer io.Writer, name string) error {
+	part, err := s.getPart(name)
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.Write(part.Data)
+	return err
+}
+
+func (s *Stream) WriteInfo(writer io.Writer, name string) error {
+	part, err := s.getPart(name)
+	if err != nil {
+		return err
+	}
+
+	infoJson, err := json.Marshal(part.Info)
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.Write(infoJson)
 	return err
 }

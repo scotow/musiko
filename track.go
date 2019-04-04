@@ -18,23 +18,37 @@ var (
 	ErrSplitMismatch     = errors.New("Playlist and parts mismatch")
 )
 
-func NewTrack(url string, httpClient *http.Client) *Track {
+type TrackInfo struct {
+	Artist string `json:"artist"`
+	Album  string `json:"album"`
+	Name   string `json:"name"`
+}
+
+func NewTrack(url string, info TrackInfo, httpClient *http.Client) *Track {
 	t := new(Track)
 	t.id = uuid.New()
 	t.url = url
+	t.info = info
 	t.httpClient = httpClient
 
 	return t
 }
 
+type Part struct {
+	Data []byte
+	Info *TrackInfo
+}
+
 type Track struct {
-	id         uuid.UUID
-	url        string
+	id   uuid.UUID
+	url  string
+	info TrackInfo
+
 	data       []byte
 	httpClient *http.Client
 
 	playlist *m3u8.MediaPlaylist
-	parts    [][]byte
+	parts    []*Part
 }
 
 func (t *Track) Open() (io.Reader, error) {
@@ -74,7 +88,7 @@ func (t *Track) ClearData() {
 }
 
 // TODO: Use defer to remove parts on error.
-func (t *Track) GetParts() (*m3u8.MediaPlaylist, [][]byte, error) {
+func (t *Track) GetParts() (*m3u8.MediaPlaylist, []*Part, error) {
 	if t.playlist != nil && t.parts != nil {
 		return t.playlist, t.parts, nil
 	}
@@ -117,19 +131,19 @@ func (t *Track) GetParts() (*m3u8.MediaPlaylist, [][]byte, error) {
 
 	// Cast and cache playlist.
 	playlistMedia := playlist.(*m3u8.MediaPlaylist)
-	parts := make([][]byte, 0, len(playlistMedia.Segments))
+	parts := make([]*Part, 0, len(playlistMedia.Segments))
 
 	for _, seg := range playlistMedia.Segments {
 		if seg == nil {
 			break
 		}
 
-		part, err := ioutil.ReadFile(path.Join(tmp, seg.URI))
+		partData, err := ioutil.ReadFile(path.Join(tmp, seg.URI))
 		if err != nil {
 			return nil, nil, err
 		}
 
-		parts = append(parts, part)
+		parts = append(parts, &Part{partData, &t.info})
 	}
 
 	if uint(len(parts)) != playlistMedia.Count() {

@@ -75,6 +75,31 @@ func handleStations(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(data)
 }
 
+func handleInfo(w http.ResponseWriter, r *http.Request) {
+	split := strings.SplitN(r.RequestURI[6:], ".", 2)
+	if len(split) != 2 {
+		fmt.Println()
+		http.NotFound(w, r)
+		return
+	}
+
+	radio, e := radios[split[0]]
+	if !e {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	err := radio.stream.WriteInfo(w, r.RequestURI[6:])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	radio.pause.Reset()
+}
+
 func handlePlaylist(w http.ResponseWriter, r *http.Request) {
 	name := r.RequestURI[1 : len(r.RequestURI)-5]
 	radio, e := radios[name]
@@ -93,14 +118,13 @@ func handlePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePart(w http.ResponseWriter, r *http.Request) {
-	split := strings.SplitN(r.RequestURI, ".", 2)
+	split := strings.SplitN(r.RequestURI[1:], ".", 2)
 	if len(split) != 2 {
 		http.NotFound(w, r)
 		return
 	}
 
-	name := split[0][1:]
-	radio, e := radios[name]
+	radio, e := radios[split[0]]
 	if !e {
 		http.NotFound(w, r)
 		return
@@ -108,7 +132,7 @@ func handlePart(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "video/mp2t")
 
-	err := radio.stream.WritePart(w, r.RequestURI[1:])
+	err := radio.stream.WritePartData(w, r.RequestURI[1:])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -175,6 +199,7 @@ func main() {
 
 	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
 	http.HandleFunc("/stations", handleStations)
+	http.HandleFunc("/info/", handleInfo)
 	http.HandleFunc("/", handle)
 
 	// Start HTTP server.

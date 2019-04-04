@@ -2,6 +2,10 @@ let audio = document.getElementById('audio');
 let animation = document.getElementById('animation');
 let slider = document.getElementById('slider');
 
+let songName = document.getElementById('song-name');
+let songArtist = document.getElementById('song-artist');
+let songAlbum = document.getElementById('song-album');
+
 let pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
 let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
 
@@ -9,10 +13,11 @@ let volumeVariation = 0.15;
 let volumeTimeout = null;
 
 let lastHls = null;
+let lastSong = null;
 
 fetch('/stations')
     .then(resp => resp.json())
-    .then(data => stationsLoaded(data));
+    .then(stations => stationsLoaded(stations));
 
 function stationsLoaded(stations) {
     if (Hls.isSupported()) {
@@ -54,7 +59,7 @@ function displayStations(stations) {
         let stationElem = document.createElement('a');
         stationElem.href = '#' + station.name;
         stationElem.classList.add('station');
-        stationElem.text = station.display;
+        stationElem.innerText = station.display;
         listElem.appendChild(stationElem);
     }
 }
@@ -75,6 +80,7 @@ function loadStation(station) {
     hls.attachMedia(audio);
 
     hls.on(Hls.Events.MANIFEST_PARSED, audio.play.bind(audio));
+    hls.on(Hls.Events.FRAG_CHANGED, updateInfoIfNeeded);
 
     lastHls = hls;
 
@@ -85,6 +91,20 @@ function loadStation(station) {
             elem.classList.remove('selected');
         }
     }
+}
+
+function updateInfoIfNeeded(event, data) {
+    let song = data.frag.relurl.split('-').slice(0, -1).join('');
+    if (song === lastSong) return;
+
+    lastSong = song;
+    fetch('/info/' + data.frag.relurl)
+        .then(resp => resp.json())
+        .then(info => {
+            songName.innerText = info.name;
+            songArtist.innerText = info.artist;
+            songAlbum.innerText = info.album;
+        });
 }
 
 function togglePlayPause() {
