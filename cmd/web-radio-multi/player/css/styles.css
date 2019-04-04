@@ -118,6 +118,10 @@ body.loading {
     font-size: 26px;
 }
 
+.song-info > .info:last-child {
+    margin-top: -6px;
+}
+
 #volume {
     display: flex;
     align-items: center;
