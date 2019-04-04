@@ -328,7 +328,6 @@ func (s *Stream) getPart(name string) (*Part, error) {
 	// Because we never alter the part's data we don't need to make a copy before writing.
 	part, exists := s.parts[name]
 	if !exists {
-		s.RUnlock()
 		return nil, ErrPartNotFound
 	}
 

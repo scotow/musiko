@@ -178,3 +178,20 @@ body.loading {
     -moz-appearance: none;
     appearance: none;
 }
+
+/* Selection */
+.selectable {
+    -webkit-touch-callout: default;
+    -webkit-user-select: auto;
+    -moz-user-select: auto;
+    -ms-user-select: auto;
+    user-select: auto;
+}
+
+.selectable::selection {
+    background: #15b154;
+}
+
+.selectable::-moz-selection {
+    background: #15b154;
+}
