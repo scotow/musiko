@@ -31,11 +31,12 @@ var (
 	ErrStreamNotRunning     = errors.New("stream not running")
 	ErrStreamNotPaused      = errors.New("stream not paused")
 	ErrPlaylistEmpty        = errors.New("the playlist is empty")
-	ErrInvalidPlaylistEntry = errors.New("playlist contains a nil entry")
+	ErrTrackNotClear        = errors.New("track not properly cleared")
+	ErrTrackNotFound        = errors.New("track not found")
 	ErrPartNotFound         = errors.New("part not found")
 )
 
-type PartURIModifier func(string) string
+type PartURIModifier func(string, int) string
 
 func NewStream(client *Client, station string, proxyLess bool) (*Stream, error) {
 	stream := new(Stream)
@@ -44,12 +45,14 @@ func NewStream(client *Client, station string, proxyLess bool) (*Stream, error) 
 	if err != nil {
 		return nil, err
 	}
-	stream.playlist = playlist
 
 	stream.id = uuid.New()
-	stream.client = client
-	stream.parts = make(map[string]*Part)
 	stream.station = station
+	stream.client = client
+	stream.playlist = playlist
+
+	stream.queue = make([]*Track, 0)
+	stream.tracks = make(map[string]*Track)
 
 	if proxyLess {
 		stream.httpClient = httpClientNoProxy()
@@ -89,8 +92,8 @@ type Stream struct {
 	pauseChan  chan struct{}
 	resumeChan chan struct{}
 
-	queue    []*m3u8.MediaSegment
-	parts    map[string]*Part
+	queue    []*Track
+	tracks   map[string]*Track
 	playlist *m3u8.MediaPlaylist
 
 	URIModifier PartURIModifier
@@ -152,7 +155,7 @@ func (s *Stream) shouldFetchPlaylist() bool {
 	s.RLock()
 	defer s.RUnlock()
 
-	return len(s.queue) <= fetchLimit && !s.fetching
+	return s.playlist.Count() <= fetchLimit && !s.fetching
 }
 
 func (s *Stream) queueNextPlaylist() error {
@@ -184,23 +187,28 @@ func (s *Stream) queueNextPlaylist() error {
 		go func(track *Track) {
 			defer wg.Done()
 
-			playlist, parts, err := track.GetParts()
+			playlist, _, err := track.GetParts()
 			if err != nil {
 				errCommon = err
 				return
 			}
-
-			// Remove reference to the original data to allow the GC to free it.
-			track.ClearData()
 
 			log.Printf("Track fetched and split (%s).\n", track.id.String())
 
 			s.Lock()
 			defer s.Unlock()
 
+			s.queue = append(s.queue, track)
+			s.tracks[track.id.String()] = track
+
 			for i, seg := range playlist.Segments {
 				if seg == nil {
 					break
+				}
+
+				// Apply URI modifier if required.
+				if s.URIModifier != nil {
+					seg.URI = s.URIModifier(track.id.String(), i)
 				}
 
 				err := s.playlist.AppendSegment(seg)
@@ -217,15 +225,6 @@ func (s *Stream) queueNextPlaylist() error {
 						return
 					}
 				}
-
-				// Apply URI modifier if required.
-				if s.URIModifier != nil {
-					seg.URI = s.URIModifier(seg.URI)
-				}
-
-				// Store the part in the main lookup map and to the auto-remove queue.
-				s.parts[seg.URI] = parts[i]
-				s.queue = append(s.queue, seg)
 			}
 
 			log.Printf("Track added to main playlist (%s).\n", track.id.String())
@@ -251,18 +250,20 @@ func (s *Stream) queueLoop() {
 			return
 		}
 
-		part := s.queue[0]
-		if part == nil {
+		current := s.queue[0]
+		if len(current.parts) == 0 {
 			s.RUnlock()
-			s.globalError(ErrInvalidPlaylistEntry)
+			s.globalError(ErrTrackNotClear)
 			return
 		}
+
+		part := current.parts[0]
 		s.RUnlock()
 
 		// TODO: Use time difference for removal.
 		// Wait for chunk to be played or stop message.
 		select {
-		case <-time.After(time.Duration(part.Duration * float64(time.Second))):
+		case <-time.After(time.Duration(part.seg.Duration * float64(time.Second))):
 		case <-s.pauseChan:
 			<-s.resumeChan
 		case <-fetchFailed:
@@ -277,16 +278,17 @@ func (s *Stream) queueLoop() {
 			return
 		}
 
-		// Shift removed part and remove it from part map.
-		s.queue[0] = nil
-		s.queue = s.queue[1:]
-		delete(s.parts, part.URI)
+		// If track is empty, remove it from the map and queue.
+		if current.slide() {
+			s.queue = s.queue[1:]
+			delete(s.tracks, current.id.String())
+		}
 
 		s.Unlock()
 
 		// TODO: Use song duration rather than part count.
 		if s.shouldFetchPlaylist() {
-			log.Printf("Playlist almost empty: %d (%s).\n", len(s.queue), s.id.String())
+			log.Printf("Playlist almost empty: %d (%s).\n", s.playlist.Count(), s.id.String())
 			go func() {
 				err := s.queueNextPlaylist()
 				if err != nil {
@@ -321,36 +323,43 @@ func (s *Stream) WritePlaylist(writer io.Writer) error {
 	return err
 }
 
-func (s *Stream) getPart(name string) (*Part, error) {
+func (s *Stream) getPart(trackId string, index int) (*Part, error) {
 	s.RLock()
 	defer s.RUnlock()
 
 	// Because we never alter the part's data we don't need to make a copy before writing.
-	part, exists := s.parts[name]
+	track, exists := s.tracks[trackId]
 	if !exists {
 		return nil, ErrPartNotFound
 	}
 
-	return part, nil
+	if index < 0 || index >= len(track.parts) {
+		return nil, ErrPartNotFound
+	}
+
+	return track.parts[index], nil
 }
 
-func (s *Stream) WritePartData(writer io.Writer, name string) error {
-	part, err := s.getPart(name)
+func (s *Stream) WritePartData(writer io.Writer, trackId string, index int) error {
+	part, err := s.getPart(trackId, index)
 	if err != nil {
 		return err
 	}
 
-	_, err = writer.Write(part.Data)
+	_, err = writer.Write(part.data)
 	return err
 }
 
-func (s *Stream) WriteInfo(writer io.Writer, name string) error {
-	part, err := s.getPart(name)
-	if err != nil {
-		return err
+func (s *Stream) WriteInfo(writer io.Writer, trackId string) error {
+	s.RLock()
+	defer s.RUnlock()
+
+	track, exists := s.tracks[trackId]
+	if !exists {
+		return ErrTrackNotFound
 	}
 
-	infoJson, err := json.Marshal(part.Info)
+	infoJson, err := json.Marshal(track.info)
 	if err != nil {
 		return err
 	}

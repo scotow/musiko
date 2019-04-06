@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/scotow/musiko"
 	"github.com/scotow/musiko/timeout"
@@ -37,110 +38,6 @@ var (
 	stationsFlag configFlags
 )
 
-func handle(w http.ResponseWriter, r *http.Request) {
-	if r.RequestURI == "/" {
-		if shouldPlayer(r) {
-			http.Redirect(w, r, "/player", http.StatusFound)
-		} else {
-			http.Redirect(w, r, fmt.Sprintf("/%s.m3u8", stationsFlag[0].Name), http.StatusFound)
-		}
-		return
-	}
-
-	if strings.HasSuffix(r.RequestURI, ".m3u8") {
-		handlePlaylist(w, r)
-		return
-	}
-
-	if strings.HasSuffix(r.RequestURI, ".ts") {
-		handlePart(w, r)
-		return
-	}
-
-	http.NotFound(w, r)
-}
-
-func shouldPlayer(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "text/html")
-}
-
-func handleStations(w http.ResponseWriter, _ *http.Request) {
-	data, err := json.Marshal(stationsFlag)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(data)
-}
-
-func handleInfo(w http.ResponseWriter, r *http.Request) {
-	split := strings.SplitN(r.RequestURI[6:], ".", 2)
-	if len(split) != 2 {
-		fmt.Println()
-		http.NotFound(w, r)
-		return
-	}
-
-	radio, e := radios[split[0]]
-	if !e {
-		http.NotFound(w, r)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	err := radio.stream.WriteInfo(w, r.RequestURI[6:])
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	radio.pause.Reset()
-}
-
-func handlePlaylist(w http.ResponseWriter, r *http.Request) {
-	name := r.RequestURI[1 : len(r.RequestURI)-5]
-	radio, e := radios[name]
-	if !e {
-		http.NotFound(w, r)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-
-	err := radio.stream.WritePlaylist(w)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func handlePart(w http.ResponseWriter, r *http.Request) {
-	split := strings.SplitN(r.RequestURI[1:], ".", 2)
-	if len(split) != 2 {
-		http.NotFound(w, r)
-		return
-	}
-
-	radio, e := radios[split[0]]
-	if !e {
-		http.NotFound(w, r)
-		return
-	}
-
-	w.Header().Set("Content-Type", "video/mp2t")
-
-	err := radio.stream.WritePartData(w, r.RequestURI[1:])
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	radio.pause.Reset()
-}
-
 func createRadio(client *musiko.Client, stationId string, name string, report chan<- error) error {
 	stationId, err := client.GetOrCreateStation(stationId)
 	if err != nil {
@@ -152,8 +49,8 @@ func createRadio(client *musiko.Client, stationId string, name string, report ch
 		return errors.New(fmt.Sprint("stream creation error: ", err.Error()))
 	}
 
-	stream.URIModifier = func(s string) string {
-		return fmt.Sprintf("%s.%s", name, s)
+	stream.URIModifier = func(id string, in int) string {
+		return fmt.Sprintf("/stations/%s/tracks/%s/parts/%d.ts", name, id, in)
 	}
 
 	err = stream.Start(report)
@@ -168,6 +65,141 @@ func createRadio(client *musiko.Client, stationId string, name string, report ch
 
 	radios[name] = &radio{name, stream, pause}
 	return nil
+}
+
+func shouldPlayer(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
+}
+
+func redirectToPlaylist(w http.ResponseWriter, r *http.Request, stationName string) {
+	http.Redirect(w, r, fmt.Sprintf("/stations/%s/playlist.m3u8", stationName), http.StatusFound)
+}
+
+func rootHandler(w http.ResponseWriter, r *http.Request) {
+	if shouldPlayer(r) {
+		http.Redirect(w, r, "/player/", http.StatusFound)
+	} else {
+		redirectToPlaylist(w, r, stationsFlag[0].Name)
+	}
+}
+
+func radioFromRequest(r *http.Request) *radio {
+	vars := mux.Vars(r)
+
+	stationName, exists := vars["name"]
+	if !exists {
+		return nil
+	}
+
+	radio, exists := radios[stationName]
+	if !exists {
+		return nil
+	}
+
+	return radio
+}
+
+func stationsListHandler(w http.ResponseWriter, _ *http.Request) {
+	data, err := json.Marshal(stationsFlag)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(data)
+}
+
+func redirectStationHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	stationName, exists := vars["name"]
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+
+	redirectToPlaylist(w, r, stationName)
+}
+
+func playlistHandler(w http.ResponseWriter, r *http.Request) {
+	radio := radioFromRequest(r)
+	if radio == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+
+	err := radio.stream.WritePlaylist(w)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func trackInfoHandler(w http.ResponseWriter, r *http.Request) {
+	radio := radioFromRequest(r)
+	if radio == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	trackId, exists := mux.Vars(r)["id"]
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	err := radio.stream.WriteInfo(w, trackId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+}
+
+func partHandler(w http.ResponseWriter, r *http.Request) {
+	radio := radioFromRequest(r)
+	if radio == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	vars := mux.Vars(r)
+
+	trackId, exists := vars["id"]
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+
+	partIndex, exists := vars["index"]
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+
+	if strings.HasSuffix(partIndex, ".ts") {
+		partIndex = partIndex[:len(partIndex)-3]
+	}
+
+	index, err := strconv.Atoi(partIndex)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "video/mp2t")
+
+	err = radio.stream.WritePartData(w, trackId, index)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	radio.pause.Reset()
 }
 
 func main() {
@@ -197,17 +229,25 @@ func main() {
 		}
 	}
 
-	http.Handle("/player/", http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
-	http.HandleFunc("/stations", handleStations)
-	http.HandleFunc("/info/", handleInfo)
-	http.HandleFunc("/", handle)
+	router := mux.NewRouter()
+
+	// Stations, tracks and parts handlers.
+	router.HandleFunc("/stations", stationsListHandler)
+	router.HandleFunc("/stations/{name}", redirectStationHandler)
+	router.HandleFunc("/stations/{name}/playlist.m3u8", playlistHandler)
+	router.HandleFunc("/stations/{name}/tracks/{id}/info", trackInfoHandler)
+	router.HandleFunc("/stations/{name}/tracks/{id}/parts/{index}", partHandler)
+
+	// Player and root fallback handlers.
+	router.PathPrefix("/player/").Handler(http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
+	router.HandleFunc("/", rootHandler)
 
 	// Start HTTP server.
 	go func() {
 		listeningAddress := ":" + strconv.Itoa(*portFlag)
 		log.Println("Listening at", listeningAddress)
 
-		err := http.ListenAndServe(listeningAddress, nil)
+		err := http.ListenAndServe(listeningAddress, router)
 		report <- err
 	}()
 

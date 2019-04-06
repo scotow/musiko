@@ -2,9 +2,9 @@ let audio = document.getElementById('audio');
 let animation = document.getElementById('animation');
 let slider = document.getElementById('slider');
 
-let songName = document.getElementById('song-name');
-let songArtist = document.getElementById('song-artist');
-let songAlbum = document.getElementById('song-album');
+let trackName = document.getElementById('track-name');
+let trackArtist = document.getElementById('track-artist');
+let trackAlbum = document.getElementById('track-album');
 
 let pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
 let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
@@ -13,7 +13,7 @@ let volumeVariation = 0.15;
 let volumeTimeout = null;
 
 let lastHls = null;
-let lastSong = null;
+let lastTrack = null;
 
 fetch('/stations')
     .then(resp => resp.json())
@@ -50,7 +50,7 @@ function stationsLoaded(stations) {
 }
 
 function playlistAddress(station) {
-    return '/' + station + '.m3u8';
+    return `/stations/${station}/playlist.m3u8`;
 }
 
 function displayStations(stations) {
@@ -94,16 +94,16 @@ function loadStation(station) {
 }
 
 function updateInfoIfNeeded(event, data) {
-    let song = data.frag.relurl.split('-').slice(0, -1).join('');
-    if (song === lastSong) return;
+    let track = data.frag.relurl.split('/').slice(1, 5).join('/');
+    if (track === lastTrack) return;
 
-    lastSong = song;
-    fetch('/info/' + data.frag.relurl)
+    lastTrack = track;
+    fetch(`/${track}/info`)
         .then(resp => resp.json())
         .then(info => {
-            songName.innerText = info.name;
-            songArtist.innerText = info.artist;
-            songAlbum.innerText = info.album;
+            trackName.innerText = info.name;
+            trackArtist.innerText = info.artist;
+            trackAlbum.innerText = info.album;
         });
 }
 

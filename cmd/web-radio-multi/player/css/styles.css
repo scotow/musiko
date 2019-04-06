@@ -105,20 +105,20 @@ body.loading {
     transform: translateX(-1px);
 }
 
-.song-info {
+.track-info {
     text-align: center;
     margin-top: 18px;
 }
 
-.song-info > .info {
+.track-info > .info {
     font-size: 18px;
 }
 
-.song-info > .info:first-child {
+.track-info > .info:first-child {
     font-size: 26px;
 }
 
-.song-info > .info:last-child {
+.track-info > .info:last-child {
     margin-top: -6px;
 }
 
