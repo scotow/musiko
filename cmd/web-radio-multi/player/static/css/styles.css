@@ -52,8 +52,8 @@ body.loading {
     padding: 0 8px;
     color: white;
     font-size: 18px;
-    text-decoration: none;
     transition: 125ms color;
+    cursor: pointer;
 }
 
 .stations > .station.selected {

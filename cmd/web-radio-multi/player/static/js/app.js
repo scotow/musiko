@@ -12,8 +12,9 @@ let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
 let volumeVariation = 0.15;
 let volumeTimeout = null;
 
-let lastHls = null;
-let lastTrack = null;
+let currentStation = null;
+let currentHls = null;
+let currentTrack = null;
 
 fetch('/stations')
     .then(resp => resp.json())
@@ -23,12 +24,6 @@ function stationsLoaded(stations) {
     if (Hls.isSupported()) {
         displayStations(stations);
         loadCookieVolume();
-
-        if (!window.location.hash) {
-            window.location.hash = stations[0].name;
-        }
-
-        window.onhashchange = loadStationHash;
 
         document.body.onkeyup = function(e) {
             if (e.key === ' ') togglePlayPause();
@@ -42,7 +37,17 @@ function stationsLoaded(stations) {
         document.getElementById('volume-down').onclick = volumeDown;
         document.getElementById('volume-up').onclick = volumeUp;
 
-        loadStationHash();
+        let currentName = uriStationName();
+        let station = stations[0];
+        if (currentName) {
+            for (let s of stations) {
+                if (s.name === currentName) {
+                    station = s;
+                    break;
+                }
+            }
+        }
+        switchToStation(station);
         document.body.classList.remove('loading');
     } else {
         window.location = playlistAddress(stations[0].name);
@@ -56,48 +61,63 @@ function playlistAddress(station) {
 function displayStations(stations) {
     let listElem = document.getElementById('stations');
     for (let station of stations) {
-        let stationElem = document.createElement('a');
-        stationElem.href = '#' + station.name;
-        stationElem.classList.add('station');
-        stationElem.innerText = station.display;
-        listElem.appendChild(stationElem);
+        let elem = document.createElement('div');
+        elem.classList.add('station');
+        elem.innerText = station.display;
+        elem.onclick = switchToStation.bind(null, station);
+        listElem.appendChild(elem);
+
+        station.elem = elem;
     }
 }
 
-function loadStationHash() {
-    if (!window.location.hash) return;
-    loadStation(window.location.hash.slice(1));
+function uriStationName() {
+    let parts = window.location.pathname.split('/');
+    if (parts.length < 3) {
+        return null;
+    }
+    if (parts[1] !== 'player' || !parts[2]) {
+        return null;
+    }
+
+    return parts[2];
+}
+
+function switchToStation(station) {
+    if (currentStation) {
+        currentStation.elem.classList.remove('selected');
+        currentStation = null;
+    }
+
+    station.elem.classList.add('selected');
+    document.title = `Musiko | ${station.display}`;
+    history.replaceState(null, null, `/player/${station.name}`);
+
+    loadStation(station);
+    currentStation = station;
 }
 
 function loadStation(station) {
-    if (lastHls) {
-        lastHls.destroy();
-        lastHls = null;
+    if (currentHls) {
+        currentHls.destroy();
+        currentHls = null;
     }
 
     let hls = new Hls();
-    hls.loadSource(playlistAddress(station));
+    hls.loadSource(playlistAddress(station.name));
     hls.attachMedia(audio);
 
     hls.on(Hls.Events.MANIFEST_PARSED, audio.play.bind(audio));
     hls.on(Hls.Events.FRAG_CHANGED, updateInfoIfNeeded);
 
-    lastHls = hls;
-
-    for (let elem of document.querySelectorAll('.stations > .station')) {
-        if (elem.href.split('#')[1] === station) {
-            elem.classList.add('selected');
-        } else {
-            elem.classList.remove('selected');
-        }
-    }
+    currentHls = hls;
 }
 
 function updateInfoIfNeeded(event, data) {
     let track = data.frag.relurl.split('/').slice(1, 5).join('/');
-    if (track === lastTrack) return;
+    if (track === currentTrack) return;
 
-    lastTrack = track;
+    currentTrack = track;
     fetch(`/${track}/info`)
         .then(resp => resp.json())
         .then(info => {

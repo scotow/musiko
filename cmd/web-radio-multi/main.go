@@ -77,10 +77,14 @@ func redirectToPlaylist(w http.ResponseWriter, r *http.Request, stationName stri
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	if shouldPlayer(r) {
-		http.Redirect(w, r, "/player/", http.StatusFound)
+		http.Redirect(w, r, "/player", http.StatusFound)
 	} else {
 		redirectToPlaylist(w, r, stationsFlag[0].Name)
 	}
+}
+
+func playerHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "player/index.html")
 }
 
 func radioFromRequest(r *http.Request) *radio {
@@ -239,7 +243,9 @@ func main() {
 	router.HandleFunc("/stations/{name}/tracks/{id}/parts/{index}", partHandler)
 
 	// Player and root fallback handlers.
-	router.PathPrefix("/player/").Handler(http.StripPrefix("/player/", http.FileServer(http.Dir("player"))))
+	router.PathPrefix("/player/").HandlerFunc(playerHandler)
+	router.Handle("/player", http.RedirectHandler("/player/", http.StatusFound))
+	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("player/static"))))
 	router.HandleFunc("/", rootHandler)
 
 	// Start HTTP server.
