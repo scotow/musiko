@@ -15,6 +15,7 @@ let volumeTimeout = null;
 let currentStation = null;
 let currentTrack = null;
 let currentHls = null;
+let isFirstStation = true;
 
 fetch('/stations')
     .then(resp => resp.json())
@@ -40,7 +41,6 @@ function stationsLoaded(stations) {
         document.getElementById('volume-up').onclick = volumeUp;
 
         switchToStation(startingStation((stations)));
-        document.body.classList.remove('loading');
     } else {
         window.location = playlistAddress(stations[0].name);
     }
@@ -130,6 +130,11 @@ function updateInfoIfNeeded(event, data) {
             trackName.innerText = info.name;
             trackArtist.innerText = info.artist;
             trackAlbum.innerText = info.album;
+
+            if (isFirstStation) {
+                isFirstStation = false;
+                document.body.classList.remove('loading');
+            }
         });
 }
 
