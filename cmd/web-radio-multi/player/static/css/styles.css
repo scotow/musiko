@@ -61,12 +61,6 @@ body.loading {
     pointer-events: none;
 }
 
-.download {
-    color: #15b154;
-    font-size: 12px;
-    cursor: pointer;
-}
-
 .player {
     flex: 1;
     display: flex;
@@ -80,11 +74,11 @@ body.loading {
     cursor: default;
 }
 
-#audio {
+.audio-hidden {
     display: none;
 }
 
-#play-pause {
+.play-pause {
     width: 90px;
     height: 90px;
     margin-top: 42px;
@@ -94,20 +88,20 @@ body.loading {
     transition: background 100ms, transform 100ms;
 }
 
-#play-pause:hover {
+.play-pause:hover {
     background: #15924a;
 }
 
-#play-pause:active {
+.play-pause:active {
     background: #148040;
     transform: scale(0.97);
 }
 
-#play-pause > svg {
+.play-pause > svg {
     fill: white;
 }
 
-#play-pause-path {
+.play-pause-path {
     transform: translateX(-1px);
 }
 
@@ -128,20 +122,26 @@ body.loading {
     margin-top: -6px;
 }
 
-#volume {
+.download {
+    color: #15b154;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.volume {
     display: flex;
     align-items: center;
     margin-top: 26px;
 }
 
-#volume > .fa {
+.volume > .fa {
     margin: 0 8px;
     font-size: 16px;
     color: #666;
     cursor: pointer;
 }
 
-#slider {
+.slider {
     width: 260px;
     height: 8px;
     background: #555;
@@ -155,11 +155,11 @@ body.loading {
     appearance: none;
 }
 
-#slider:hover, #slider:active {
+.slider:hover, .slider:active {
     transform: scaleY(1.7);
 }
 
-#slider::-webkit-slider-thumb {
+.slider::-webkit-slider-thumb {
     width: 20px;
     height: 20px;
     background: white;
@@ -172,7 +172,7 @@ body.loading {
     appearance: none;
 }
 
-#slider::-moz-range-thumb {
+.slider::-moz-range-thumb {
     width: 20px;
     height: 20px;
     background: white;
