@@ -39,21 +39,25 @@ function stationsLoaded(stations) {
         document.getElementById('volume-down').onclick = volumeDown;
         document.getElementById('volume-up').onclick = volumeUp;
 
-        let currentName = uriStationName();
-        let station = stations[0];
-        if (currentName) {
-            for (let s of stations) {
-                if (s.name === currentName) {
-                    station = s;
-                    break;
-                }
-            }
-        }
-        switchToStation(station);
+        switchToStation(startingStation((stations)));
         document.body.classList.remove('loading');
     } else {
         window.location = playlistAddress(stations[0].name);
     }
+}
+
+function startingStation(stations) {
+    let currentName = uriStationName();
+    let station = stations[0];
+    if (currentName) {
+        for (let s of stations) {
+            if (s.name === currentName) {
+                station = s;
+                break;
+            }
+        }
+    }
+    return station;
 }
 
 function playlistAddress(station) {
