@@ -367,3 +367,30 @@ func (s *Stream) WriteInfo(writer io.Writer, trackId string) error {
 	_, err = writer.Write(infoJson)
 	return err
 }
+
+func (s *Stream) TrackInfo(trackId string) (*TrackInfo, error) {
+	s.RLock()
+	defer s.RUnlock()
+
+	track, exists := s.tracks[trackId]
+	if !exists {
+		return nil, ErrTrackNotFound
+	}
+
+	return &track.info, nil
+}
+
+func (s *Stream) WriteTrack(writer io.Writer, trackId string) error {
+	s.RLock()
+
+	// Because we never alter the track's data we don't need to make a copy before writing.
+	track, exists := s.tracks[trackId]
+	if !exists {
+		return ErrTrackNotFound
+	}
+
+	s.RUnlock()
+
+	_, err := writer.Write(track.data)
+	return err
+}

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/kennygrant/sanitize"
 	"github.com/pkg/errors"
 	"github.com/scotow/musiko"
 	"github.com/scotow/musiko/timeout"
@@ -164,6 +165,35 @@ func trackInfoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func trackDownloadHandler(w http.ResponseWriter, r *http.Request) {
+	radio := radioFromRequest(r)
+	if radio == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	trackId, exists := mux.Vars(r)["id"]
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+
+	info, err := radio.stream.TrackInfo(trackId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "video/mp4")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.mp4", sanitize.BaseName(info.Name)))
+
+	err = radio.stream.WriteTrack(w, trackId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+}
+
 func partHandler(w http.ResponseWriter, r *http.Request) {
 	radio := radioFromRequest(r)
 	if radio == nil {
@@ -240,6 +270,7 @@ func main() {
 	router.HandleFunc("/stations/{name}", redirectStationHandler)
 	router.HandleFunc("/stations/{name}/playlist.m3u8", playlistHandler)
 	router.HandleFunc("/stations/{name}/tracks/{id}/info", trackInfoHandler)
+	router.HandleFunc("/stations/{name}/tracks/{id}/download", trackDownloadHandler)
 	router.HandleFunc("/stations/{name}/tracks/{id}/parts/{index}", partHandler)
 
 	// Player and root fallback handlers.

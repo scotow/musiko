@@ -13,8 +13,8 @@ let volumeVariation = 0.15;
 let volumeTimeout = null;
 
 let currentStation = null;
-let currentHls = null;
 let currentTrack = null;
+let currentHls = null;
 
 fetch('/stations')
     .then(resp => resp.json())
@@ -32,6 +32,8 @@ function stationsLoaded(stations) {
         audio.onplay = updatePlayPauseButton;
         audio.onpause = updatePlayPauseButton;
         slider.oninput = volumeSliderChanged;
+
+        document.getElementById('download').onclick = downloadTrack;
 
         document.getElementById('play-pause').onclick = togglePlayPause;
         document.getElementById('volume-down').onclick = volumeDown;
@@ -125,6 +127,11 @@ function updateInfoIfNeeded(event, data) {
             trackArtist.innerText = info.artist;
             trackAlbum.innerText = info.album;
         });
+}
+
+function downloadTrack() {
+    if (!currentTrack) return;
+    window.location = `/${currentTrack}/download`
 }
 
 function togglePlayPause() {

@@ -61,6 +61,12 @@ body.loading {
     pointer-events: none;
 }
 
+.download {
+    color: #15b154;
+    font-size: 12px;
+    cursor: pointer;
+}
+
 .player {
     flex: 1;
     display: flex;
