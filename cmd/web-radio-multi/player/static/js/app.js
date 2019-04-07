@@ -40,24 +40,26 @@ function stationsLoaded(info) {
         document.getElementById('volume-down').onclick = volumeDown;
         document.getElementById('volume-up').onclick = volumeUp;
 
-        switchToStation(startingStation((info.stations)));
+        switchToStation(startingStation((info)));
     } else {
         window.location = playlistAddress(info.default);
     }
 }
 
-function startingStation(stations) {
+function startingStation(info) {
     let currentName = uriStationName();
-    let station = stations[0];
-    if (currentName) {
-        for (let s of stations) {
-            if (s.name === currentName) {
-                station = s;
-                break;
-            }
+    let defaultStation;
+
+    for (let station of info.stations) {
+        if (station.name === currentName) {
+            return station;
+        }
+        if (station.name === info.default) {
+            defaultStation = station;
         }
     }
-    return station;
+
+    return defaultStation;
 }
 
 function playlistAddress(station) {
