@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,6 +30,7 @@ type radio struct {
 
 var (
 	radios = make(map[string]*radio)
+	lock   sync.Mutex
 )
 
 var (
@@ -50,8 +52,8 @@ func createRadio(client *musiko.Client, stationId string, name string, report ch
 		return errors.New(fmt.Sprint("stream creation error: ", err.Error()))
 	}
 
-	stream.URIModifier = func(id string, in int) string {
-		return fmt.Sprintf("/stations/%s/tracks/%s/parts/%d.ts", name, id, in)
+	stream.URIModifier = func(trackId string, partIndex int) string {
+		return fmt.Sprintf("/stations/%s/tracks/%s/parts/%d.ts", name, trackId, partIndex)
 	}
 
 	err = stream.Start(report)
@@ -64,7 +66,10 @@ func createRadio(client *musiko.Client, stationId string, name string, report ch
 		report <- pause.Start()
 	}()
 
+	lock.Lock()
 	radios[name] = &radio{name, stream, pause}
+	lock.Unlock()
+
 	return nil
 }
 
@@ -88,20 +93,34 @@ func playerHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "player/index.html")
 }
 
-func radioFromRequest(r *http.Request) *radio {
+func radioFromRequest(r *http.Request) (*radio, bool) {
 	vars := mux.Vars(r)
 
 	stationName, exists := vars["name"]
 	if !exists {
-		return nil
+		return nil, false
 	}
 
 	radio, exists := radios[stationName]
 	if !exists {
-		return nil
+		return nil, false
 	}
 
-	return radio
+	return radio, true
+}
+
+func radioTrackFromRequest(r *http.Request) (*radio, string, bool) {
+	radio, ok := radioFromRequest(r)
+	if !ok {
+		return nil, "", false
+	}
+
+	trackId, exists := mux.Vars(r)["id"]
+	if !exists {
+		return nil, "", false
+	}
+
+	return radio, trackId, true
 }
 
 func stationsListHandler(w http.ResponseWriter, _ *http.Request) {
@@ -128,8 +147,8 @@ func redirectStationHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func playlistHandler(w http.ResponseWriter, r *http.Request) {
-	radio := radioFromRequest(r)
-	if radio == nil {
+	radio, ok := radioFromRequest(r)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
@@ -144,14 +163,8 @@ func playlistHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func trackInfoHandler(w http.ResponseWriter, r *http.Request) {
-	radio := radioFromRequest(r)
-	if radio == nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	trackId, exists := mux.Vars(r)["id"]
-	if !exists {
+	radio, trackId, ok := radioTrackFromRequest(r)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
@@ -166,14 +179,8 @@ func trackInfoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func trackDownloadHandler(w http.ResponseWriter, r *http.Request) {
-	radio := radioFromRequest(r)
-	if radio == nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	trackId, exists := mux.Vars(r)["id"]
-	if !exists {
+	radio, trackId, ok := radioTrackFromRequest(r)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
@@ -195,21 +202,13 @@ func trackDownloadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func partHandler(w http.ResponseWriter, r *http.Request) {
-	radio := radioFromRequest(r)
-	if radio == nil {
+	radio, trackId, ok := radioTrackFromRequest(r)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 
-	vars := mux.Vars(r)
-
-	trackId, exists := vars["id"]
-	if !exists {
-		http.NotFound(w, r)
-		return
-	}
-
-	partIndex, exists := vars["index"]
+	partIndex, exists := mux.Vars(r)["index"]
 	if !exists {
 		http.NotFound(w, r)
 		return
@@ -256,12 +255,18 @@ func main() {
 
 	report := make(chan error)
 
-	for _, station := range stationsFlag {
-		err = createRadio(client, station.id, station.Name, report)
-		if err != nil {
-			log.Fatalln(err)
-		}
+	var wg sync.WaitGroup
+	wg.Add(len(stationsFlag))
+	for _, s := range stationsFlag {
+		go func(station config) {
+			err = createRadio(client, station.id, station.Name, report)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			wg.Done()
+		}(s)
 	}
+	wg.Wait()
 
 	router := mux.NewRouter()
 
