@@ -29,14 +29,16 @@ type radio struct {
 }
 
 var (
-	radios = make(map[string]*radio)
-	lock   sync.Mutex
+	radios         = make(map[string]*radio)
+	defaultStation string
+	lock           sync.Mutex
 )
 
 var (
 	usernameFlag = flag.String("u", "", "Pandora username (or e-mail address)")
 	passwordFlag = flag.String("p", "", "Pandora password")
 	portFlag     = flag.Int("P", 8080, "HTTP listening port")
+	defaultFlag  = flag.String("d", "", "default station")
 
 	stationsFlag configFlags
 )
@@ -67,7 +69,13 @@ func createRadio(client *musiko.Client, stationId string, name string, report ch
 	}()
 
 	lock.Lock()
+	// Add the radio to the radio map.
 	radios[name] = &radio{name, stream, pause}
+
+	// Set the station as the default one if the name matches with the flag.
+	if *defaultFlag != "" && *defaultFlag == name {
+		defaultStation = name
+	}
 	lock.Unlock()
 
 	return nil
@@ -124,7 +132,11 @@ func radioTrackFromRequest(r *http.Request) (*radio, string, bool) {
 }
 
 func stationsListHandler(w http.ResponseWriter, _ *http.Request) {
-	data, err := json.Marshal(stationsFlag)
+	info := make(map[string]interface{})
+	info["stations"] = stationsFlag
+	info["default"] = defaultStation
+
+	data, err := json.Marshal(info)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -254,6 +266,7 @@ func main() {
 	}
 
 	report := make(chan error)
+	defaultStation = stationsFlag[0].Name
 
 	var wg sync.WaitGroup
 	wg.Add(len(stationsFlag))
@@ -267,6 +280,8 @@ func main() {
 		}(s)
 	}
 	wg.Wait()
+
+	log.Printf("Default station: %s.\n", defaultStation)
 
 	router := mux.NewRouter()
 

@@ -19,11 +19,11 @@ let isFirstStation = true;
 
 fetch('/stations')
     .then(resp => resp.json())
-    .then(stations => stationsLoaded(stations));
+    .then(info => stationsLoaded(info));
 
-function stationsLoaded(stations) {
+function stationsLoaded(info) {
     if (Hls.isSupported()) {
-        displayStations(stations);
+        displayStations(info.stations);
         loadCookieVolume();
 
         document.body.onkeyup = function(e) {
@@ -40,9 +40,9 @@ function stationsLoaded(stations) {
         document.getElementById('volume-down').onclick = volumeDown;
         document.getElementById('volume-up').onclick = volumeUp;
 
-        switchToStation(startingStation((stations)));
+        switchToStation(startingStation((info.stations)));
     } else {
-        window.location = playlistAddress(stations[0].name);
+        window.location = playlistAddress(info.default);
     }
 }
 
