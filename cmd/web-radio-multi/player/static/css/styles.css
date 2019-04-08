@@ -125,7 +125,13 @@ body.loading {
 .download {
     color: #15b154;
     font-size: 12px;
+    transition: opacity 150ms;
     cursor: pointer;
+}
+
+.download.disabled {
+    opacity: 0.4;
+    pointer-events: none;
 }
 
 .volume {

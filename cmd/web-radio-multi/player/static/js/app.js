@@ -5,6 +5,7 @@ let slider = document.getElementById('slider');
 let trackName = document.getElementById('track-name');
 let trackArtist = document.getElementById('track-artist');
 let trackAlbum = document.getElementById('track-album');
+let download = document.getElementById('download');
 
 let pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
 let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
@@ -30,11 +31,11 @@ function stationsLoaded(info) {
             if (e.key === ' ') togglePlayPause();
         };
 
-        audio.onplay = updatePlayPauseButton;
-        audio.onpause = updatePlayPauseButton;
+        audio.onplay = playPauseToggled;
+        audio.onpause = playPauseToggled;
         slider.oninput = volumeSliderChanged;
 
-        document.getElementById('download').onclick = downloadTrack;
+        download.onclick = downloadTrack;
 
         document.getElementById('play-pause').onclick = togglePlayPause;
         document.getElementById('volume-down').onclick = volumeDown;
@@ -149,10 +150,11 @@ function togglePlayPause() {
     audio.paused ? audio.play() : audio.pause();
 }
 
-function updatePlayPauseButton() {
+function playPauseToggled() {
     animation.setAttribute('from', audio.paused ? play : pause);
     animation.setAttribute('to', audio.paused ? pause : play);
     animation.beginElement();
+    (audio.paused ? download.classList.add : download.classList.remove).call(download.classList, 'disabled');
 }
 
 function volumeDown() {
