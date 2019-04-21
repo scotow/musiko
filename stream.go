@@ -250,14 +250,14 @@ func (s *Stream) queueLoop() {
 			return
 		}
 
-		current := s.queue[0]
-		if len(current.parts) == 0 {
+		track := s.queue[0]
+		if len(track.queue) == 0 {
 			s.RUnlock()
 			s.globalError(ErrTrackNotClear)
 			return
 		}
 
-		part := current.parts[0]
+		part := track.queue[0]
 		s.RUnlock()
 
 		// TODO: Use time difference for removal.
@@ -279,9 +279,9 @@ func (s *Stream) queueLoop() {
 		}
 
 		// If track is empty, remove it from the map and queue.
-		if current.slide() {
+		if track.slide() {
 			s.queue = s.queue[1:]
-			delete(s.tracks, current.id.String())
+			delete(s.tracks, track.id.String())
 		}
 
 		s.Unlock()
@@ -307,7 +307,7 @@ func (s *Stream) globalError(err error) {
 	}
 }
 
-func (s *Stream) WritePlaylist(writer io.Writer) error {
+func (s *Stream) WritePlaylist(writer io.Writer) (int, error) {
 	s.RLock()
 
 	// TODO: Use a inner cache.
@@ -319,8 +319,7 @@ func (s *Stream) WritePlaylist(writer io.Writer) error {
 	// Unlock here to allow long writing.
 	s.RUnlock()
 
-	_, err := writer.Write(data)
-	return err
+	return writer.Write(data)
 }
 
 func (s *Stream) getPart(trackId string, index int) (*Part, error) {
@@ -340,32 +339,30 @@ func (s *Stream) getPart(trackId string, index int) (*Part, error) {
 	return track.parts[index], nil
 }
 
-func (s *Stream) WritePartData(writer io.Writer, trackId string, index int) error {
+func (s *Stream) WritePartData(writer io.Writer, trackId string, index int) (int, error) {
 	part, err := s.getPart(trackId, index)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err = writer.Write(part.data)
-	return err
+	return writer.Write(part.data)
 }
 
-func (s *Stream) WriteInfo(writer io.Writer, trackId string) error {
+func (s *Stream) WriteInfo(writer io.Writer, trackId string) (int, error) {
 	s.RLock()
 	defer s.RUnlock()
 
 	track, exists := s.tracks[trackId]
 	if !exists {
-		return ErrTrackNotFound
+		return 0, ErrTrackNotFound
 	}
 
 	infoJson, err := json.Marshal(track.info)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err = writer.Write(infoJson)
-	return err
+	return writer.Write(infoJson)
 }
 
 func (s *Stream) TrackInfo(trackId string) (*TrackInfo, error) {
@@ -380,17 +377,16 @@ func (s *Stream) TrackInfo(trackId string) (*TrackInfo, error) {
 	return &track.info, nil
 }
 
-func (s *Stream) WriteTrack(writer io.Writer, trackId string) error {
+func (s *Stream) WriteTrack(writer io.Writer, trackId string) (int, error) {
 	s.RLock()
 
 	// Because we never alter the track's data we don't need to make a copy before writing.
 	track, exists := s.tracks[trackId]
 	if !exists {
-		return ErrTrackNotFound
+		return 0, ErrTrackNotFound
 	}
 
 	s.RUnlock()
 
-	_, err := writer.Write(track.data)
-	return err
+	return writer.Write(track.data)
 }

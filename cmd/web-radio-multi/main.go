@@ -93,7 +93,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	if shouldPlayer(r) {
 		http.Redirect(w, r, "/player", http.StatusFound)
 	} else {
-		redirectToPlaylist(w, r, stationsFlag[0].Name)
+		redirectToPlaylist(w, r, defaultStation)
 	}
 }
 
@@ -167,7 +167,7 @@ func playlistHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 
-	err := radio.stream.WritePlaylist(w)
+	_, err := radio.stream.WritePlaylist(w)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -183,7 +183,7 @@ func trackInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	err := radio.stream.WriteInfo(w, trackId)
+	_, err := radio.stream.WriteInfo(w, trackId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -206,7 +206,7 @@ func trackDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "video/mp4")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.mp4", sanitize.BaseName(info.Name)))
 
-	err = radio.stream.WriteTrack(w, trackId)
+	_, err = radio.stream.WriteTrack(w, trackId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -238,7 +238,7 @@ func partHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "video/mp2t")
 
-	err = radio.stream.WritePartData(w, trackId, index)
+	_, err = radio.stream.WritePartData(w, trackId, index)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
