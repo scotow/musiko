@@ -390,3 +390,11 @@ func (s *Stream) WriteTrack(writer io.Writer, trackId string) (int, error) {
 
 	return writer.Write(track.data)
 }
+
+func (s *Stream) TrackAvailable(trackId string) bool {
+	s.RLock()
+	defer s.RUnlock()
+
+	_, exists := s.tracks[trackId]
+	return exists
+}

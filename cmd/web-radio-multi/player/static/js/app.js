@@ -17,6 +17,7 @@ let currentStation = null;
 let currentTrack = null;
 let currentHls = null;
 let isFirstStation = true;
+let enableDownloadOnFrag = true;
 
 fetch('/stations')
     .then(resp => resp.json())
@@ -117,12 +118,17 @@ function loadStation(station) {
     hls.attachMedia(audio);
 
     hls.on(Hls.Events.MANIFEST_PARSED, audio.play.bind(audio));
-    hls.on(Hls.Events.FRAG_CHANGED, updateInfoIfNeeded);
+    hls.on(Hls.Events.FRAG_CHANGED, fragmentChanged);
 
     currentHls = hls;
 }
 
-function updateInfoIfNeeded(event, data) {
+function fragmentChanged(event, data) {
+    if (enableDownloadOnFrag) {
+        enableDownloadOnFrag = false;
+        download.classList.remove('disabled');
+    }
+
     let track = data.frag.relurl.split('/').slice(1, 5).join('/');
     if (track === currentTrack) return;
 
@@ -154,7 +160,11 @@ function playPauseToggled() {
     animation.setAttribute('from', audio.paused ? play : pause);
     animation.setAttribute('to', audio.paused ? pause : play);
     animation.beginElement();
-    (audio.paused ? download.classList.add : download.classList.remove).call(download.classList, 'disabled');
+
+    if (audio.paused) {
+        enableDownloadOnFrag = true;
+        download.classList.add('disabled');
+    }
 }
 
 function volumeDown() {
