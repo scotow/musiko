@@ -213,7 +213,7 @@ func trackDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func trackDownloadbleHandler(w http.ResponseWriter, r *http.Request) {
+func trackDownloadableHandler(w http.ResponseWriter, r *http.Request) {
 	radio, trackId, ok := radioTrackFromRequest(r)
 	if !ok {
 		http.NotFound(w, r)
@@ -308,7 +308,7 @@ func main() {
 	router.HandleFunc("/stations/{name}/playlist.m3u8", playlistHandler)
 	router.HandleFunc("/stations/{name}/tracks/{id}/info", trackInfoHandler)
 	router.HandleFunc("/stations/{name}/tracks/{id}/download", trackDownloadHandler)
-	router.HandleFunc("/stations/{name}/tracks/{id}/downloadable", trackDownloadbleHandler)
+	router.HandleFunc("/stations/{name}/tracks/{id}/downloadable", trackDownloadableHandler)
 	router.HandleFunc("/stations/{name}/tracks/{id}/parts/{index}", partHandler)
 
 	// Player and root fallback handlers.
