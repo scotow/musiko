@@ -166,7 +166,6 @@ func playlistHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-
 	_, err := radio.stream.WritePlaylist(w)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -182,7 +181,6 @@ func trackInfoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
 	_, err := radio.stream.WriteInfo(w, trackId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -205,7 +203,6 @@ func trackDownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "video/mp4")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.mp4", sanitize.BaseName(info.Name)))
-
 	_, err = radio.stream.WriteTrack(w, trackId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -254,7 +251,6 @@ func partHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "video/mp2t")
-
 	_, err = radio.stream.WritePartData(w, trackId, index)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
