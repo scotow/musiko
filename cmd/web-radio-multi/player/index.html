@@ -4,10 +4,9 @@
     <title>Musiko</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/static/css/styles.css">
-    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css">
-    <link rel="shortcut icon" type="image/png" href="/static/favicon.png"/>
+    <link rel="stylesheet" href="/static/css/master.css">
     <script src="/static/js/hls.light.min.js"></script>
+    <link rel="shortcut icon" type="image/png" href="/static/favicon.png"/>
 </head>
 <body class="loading">
     <div id="stations" class="stations"></div>
@@ -27,9 +26,9 @@
         </div>
         <div id="download" class="download disabled">Download</div>
         <div class="volume">
-            <i id="volume-down" class="fa fa-volume-down"></i>
+            <i id="volume-down" class="icon icon-volume-down"></i>
             <input id="slider" class="slider" type="range" min="0" max="100" value="100">
-            <i id="volume-up" class="fa fa-volume-up"></i>
+            <i id="volume-up" class="icon icon-volume-up"></i>
         </div>
     </div>
     <audio id="audio" class="audio-hidden" controls></audio>
