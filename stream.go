@@ -14,11 +14,12 @@ import (
 )
 
 const (
-	playlistCapacity = 256
-	playlistSize     = 6  // About 60 sec of music.
-	fetchLimit       = 64 // About 10 min of music.
+	playlistCapacity = 256     // About 10 songs.
+	playlistSize     = 6       // About 60 sec of music.
+	fetchLimit       = 10 * 60 // 10 min of music.
 )
 
+// Stream state.
 const (
 	stopped = iota
 	running
@@ -92,9 +93,10 @@ type Stream struct {
 	pauseChan  chan struct{}
 	resumeChan chan struct{}
 
-	queue    []*Track
-	tracks   map[string]*Track
-	playlist *m3u8.MediaPlaylist
+	available float64
+	queue     []*Track
+	tracks    map[string]*Track
+	playlist  *m3u8.MediaPlaylist
 
 	URIModifier PartURIModifier
 
@@ -155,7 +157,7 @@ func (s *Stream) shouldFetchPlaylist() bool {
 	s.RLock()
 	defer s.RUnlock()
 
-	return s.playlist.Count() <= fetchLimit && !s.fetching
+	return s.available <= fetchLimit && !s.fetching
 }
 
 func (s *Stream) queueNextPlaylist() error {
@@ -206,6 +208,9 @@ func (s *Stream) queueNextPlaylist() error {
 					break
 				}
 
+				// Increment total duration by segment duration.
+				s.available += seg.Duration
+
 				// Apply URI modifier if required.
 				if s.URIModifier != nil {
 					seg.URI = s.URIModifier(track.id.String(), i)
@@ -233,7 +238,7 @@ func (s *Stream) queueNextPlaylist() error {
 
 	wg.Wait()
 
-	log.Printf("New playlist queued (%s).\n", s.id.String())
+	log.Printf("New playlist queued. Total duration: %.2fs (%s).\n", s.available, s.id.String())
 	return errCommon
 }
 
@@ -284,11 +289,13 @@ func (s *Stream) queueLoop() {
 			delete(s.tracks, track.id.String())
 		}
 
+		// Remove segment duration from the total.
+		s.available -= part.seg.Duration
+
 		s.Unlock()
 
-		// TODO: Use song duration rather than part count.
 		if s.shouldFetchPlaylist() {
-			log.Printf("Playlist almost empty: %d (%s).\n", s.playlist.Count(), s.id.String())
+			log.Printf("Playlist almost empty: %.2fs (%s).\n", s.available, s.id.String())
 			go func() {
 				err := s.queueNextPlaylist()
 				if err != nil {
