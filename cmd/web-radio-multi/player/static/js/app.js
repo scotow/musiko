@@ -1,16 +1,16 @@
-let audio = document.getElementById('audio');
-let animation = document.getElementById('animation');
-let slider = document.getElementById('slider');
+const audio = document.getElementById('audio');
+const animation = document.getElementById('animation');
+const slider = document.getElementById('slider');
 
-let trackName = document.getElementById('track-name');
-let trackArtist = document.getElementById('track-artist');
-let trackAlbum = document.getElementById('track-album');
-let download = document.getElementById('download');
+const trackName = document.getElementById('track-name');
+const trackArtist = document.getElementById('track-artist');
+const trackAlbum = document.getElementById('track-album');
+const download = document.getElementById('download');
 
-let pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
-let play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
+const pause = 'M11,10 L18,13.74 18,22.28 11,26 M18,13.74 L26,18 26,18 18,22.28';
+const play = 'M11,10 L17,10 17,26 11,26 M20,10 L26,10 26,26 20,26';
 
-let volumeVariation = 0.15;
+const volumeVariation = 0.15;
 let volumeTimeout = null;
 
 let currentStation = null;
@@ -19,8 +19,7 @@ let currentHls = null;
 let isFirstStation = true;
 let enableDownloadOnFrag = true;
 
-fetch('/stations')
-    .then(resp => resp.json())
+fetchJson('/stations')
     .then(info => stationsLoaded(info));
 
 function stationsLoaded(info) {
@@ -49,7 +48,7 @@ function stationsLoaded(info) {
 }
 
 function startingStation(info) {
-    let currentName = uriStationName();
+    const currentName = uriStationName();
     let defaultStation;
 
     for (let station of info.stations) {
@@ -69,20 +68,20 @@ function playlistAddress(station) {
 }
 
 function displayStations(stations) {
-    let listElem = document.getElementById('stations');
+    const listElem = document.getElementById('stations');
     for (let station of stations) {
-        let elem = document.createElement('div');
+        const elem = document.createElement('div');
         elem.classList.add('station');
         elem.innerText = station.display;
         elem.onclick = switchToStation.bind(null, station);
-        listElem.appendChild(elem);
 
+        listElem.appendChild(elem);
         station.elem = elem;
     }
 }
 
 function uriStationName() {
-    let parts = window.location.pathname.split('/');
+    const parts = window.location.pathname.split('/');
     if (parts.length < 3) {
         return null;
     }
@@ -113,7 +112,7 @@ function loadStation(station) {
         currentHls = null;
     }
 
-    let hls = new Hls();
+    const hls = new Hls();
     hls.loadSource(playlistAddress(station.name));
     hls.attachMedia(audio);
 
@@ -129,12 +128,11 @@ function fragmentChanged(event, data) {
         download.classList.remove('disabled');
     }
 
-    let track = data.frag.relurl.split('/').slice(1, 5).join('/');
+    const track = data.frag.relurl.split('/').slice(1, 5).join('/');
     if (track === currentTrack) return;
 
     currentTrack = track;
-    fetch(`/${track}/info`)
-        .then(resp => resp.json())
+    fetchJson(`/${track}/info`)
         .then(info => {
             trackName.innerText = info.name;
             trackArtist.innerText = info.artist;
@@ -162,8 +160,21 @@ function playPauseToggled() {
     animation.beginElement();
 
     if (audio.paused) {
-        enableDownloadOnFrag = true;
         download.classList.add('disabled');
+    } else {
+        if (!currentTrack) {
+            enableDownloadOnFrag = true;
+            return;
+        }
+
+        fetchJson(`/${currentTrack}/downloadable`)
+            .then(available => {
+                if (available) {
+                    download.classList.remove('disabled');
+                } else {
+                    enableDownloadOnFrag = true;
+                }
+            });
     }
 }
 
@@ -199,12 +210,15 @@ function updateVolumeSlider() {
 
 function loadCookieVolume() {
     for (let cookie of document.cookie.split(';')) {
-        let parts = cookie.split('=');
+        const parts = cookie.split('=');
         if (parts[0] === 'volume') {
-            let volume = parseInt(parts[1]);
-            audio.volume = volume / 100;
+            audio.volume = parseInt(parts[1]) / 100;
             updateVolumeSlider();
             return;
         }
     }
+}
+
+function fetchJson(url) {
+    return fetch(url).then(resp => resp.json());
 }
