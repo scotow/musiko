@@ -27,8 +27,8 @@ function stationsLoaded(info) {
         displayStations(info.stations);
         loadCookieVolume();
 
-        document.body.onkeyup = function(e) {
-            if (e.key === ' ') togglePlayPause();
+        document.body.onkeyup = event => {
+            if (event.key === ' ') togglePlayPause();
         };
 
         audio.onplay = playPauseToggled;
@@ -41,7 +41,7 @@ function stationsLoaded(info) {
         document.getElementById('volume-down').onclick = volumeDown;
         document.getElementById('volume-up').onclick = volumeUp;
 
-        switchToStation(startingStation((info)));
+        switchToStation(startingStation(info));
     } else {
         window.location = playlistAddress(info.default);
     }
