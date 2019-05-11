@@ -1,0 +1,27 @@
+@media screen and (max-height: 650px) {
+    .title {
+        display: none;
+    }
+
+    .play-pause {
+        width: 75px;
+        height: 75px;
+        margin-top: 8px;
+    }
+
+    .track-info {
+        margin-top: 12px;
+    }
+
+    .track-info > .info {
+        font-size: 12px;
+    }
+
+    .track-info > .info:first-child {
+        font-size: 20px;
+    }
+
+    .volume {
+        margin-top: 12px;
+    }
+}
